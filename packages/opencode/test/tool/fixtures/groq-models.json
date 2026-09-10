@@ -1,0 +1,20 @@
+{
+  "_comment": "Cached snapshot of Groq Free-plan served models. Source: official rate-limits Free Plan Limits table (https://console.groq.com/docs/rate-limits); the live GET /openai/v1/models endpoint requires an API key, so the snapshot is taken from docs instead. $0 basis: Free tier requires no payment method (only Developer upgrades do, per billing-faqs) and usage-based charges stop on downgrade. Verified 2026-09-10; re-verify if the guard test fails.",
+  "source": "https://console.groq.com/docs/rate-limits",
+  "verified": "2026-09-10",
+  "models": [
+    { "id": "canopylabs/orpheus-arabic-saudi", "free_limits": { "rpm": 10, "rpd": 100, "tpm": 1200, "tpd": 3600 } },
+    { "id": "canopylabs/orpheus-v1-english", "free_limits": { "rpm": 10, "rpd": 100, "tpm": 1200, "tpd": 3600 } },
+    { "id": "groq/compound", "free_limits": { "rpm": 30, "rpd": 250, "tpm": 70000 } },
+    { "id": "groq/compound-mini", "free_limits": { "rpm": 30, "rpd": 250, "tpm": 70000 } },
+    { "id": "meta-llama/llama-prompt-guard-2-22m", "free_limits": { "rpm": 30, "rpd": 14400, "tpm": 15000, "tpd": 500000 } },
+    { "id": "meta-llama/llama-prompt-guard-2-86m", "free_limits": { "rpm": 30, "rpd": 14400, "tpm": 15000, "tpd": 500000 } },
+    { "id": "openai/gpt-oss-120b", "context_window": 131072, "free_limits": { "rpm": 30, "rpd": 1000, "tpm": 8000, "tpd": 200000 } },
+    { "id": "openai/gpt-oss-20b", "context_window": 131072, "free_limits": { "rpm": 30, "rpd": 1000, "tpm": 8000, "tpd": 200000 } },
+    { "id": "openai/gpt-oss-safeguard-20b", "context_window": 131072, "free_limits": { "rpm": 30, "rpd": 1000, "tpm": 8000, "tpd": 200000 } },
+    { "id": "qwen/qwen3.6-27b", "free_limits": { "rpm": 30, "rpd": 1000, "tpm": 8000, "tpd": 200000 } },
+    { "id": "qwen/qwen3.8-27b", "free_limits": { "rpm": 30, "rpd": 1000, "tpm": 8000, "tpd": 200000 } },
+    { "id": "whisper-large-v3", "free_limits": { "rpm": 20, "rpd": 2000 } },
+    { "id": "whisper-large-v3-turbo", "free_limits": { "rpm": 20, "rpd": 2000 } }
+  ]
+}

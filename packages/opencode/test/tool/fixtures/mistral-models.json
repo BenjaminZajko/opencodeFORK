@@ -1,0 +1,8 @@
+{
+  "_comment": "Cached snapshot of Mistral Free-mode servable models. Source: official pricing table + Codestral model page (https://docs.mistral.ai/inference/pricing, https://docs.mistral.ai/models/codestral-25-08); the live GET /v1/models endpoint requires an API key, so the snapshot is taken from docs instead. $0 basis: Free mode requires no credit card and is rate-limited (payment method only required to upgrade, per official quickstart); per-model prices below are paid-tier rates that do not apply on Free. Verified 2026-09-10; re-verify if the guard test fails.",
+  "source": "https://docs.mistral.ai/inference/pricing",
+  "verified": "2026-09-10",
+  "models": [
+    { "id": "codestral-latest", "versioned_id": "codestral-2508", "context_window": 131072, "paid_cost": { "input": 0.3, "output": 0.9 }, "capabilities": ["function-calling", "fim", "structured-outputs"] }
+  ]
+}

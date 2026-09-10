@@ -86,6 +86,33 @@ function providerCfg(url: string) {
   }
 }
 
+function fallbackCfg(url: string) {
+  const model = (id: string) => ({
+    id,
+    name: id,
+    attachment: false,
+    reasoning: false,
+    temperature: false,
+    tool_call: true,
+    release_date: "2025-01-01",
+    limit: { context: 100000, output: 10000 },
+    cost: { input: 0, output: 0 },
+    options: {},
+  })
+  const options = { apiKey: "test-key", baseURL: url }
+  return {
+    provider: {
+      openrouter: {
+        name: "OpenRouter",
+        id: "openrouter",
+        env: [],
+        npm: "@ai-sdk/openai-compatible",
+        models: { "cohere/north-mini-code:free": model("cohere/north-mini-code:free") },
+        options,
+      },
+    },
+  }
+}
 function agent(): Agent.Info {
   return {
     name: "build",
@@ -1167,5 +1194,110 @@ itFragmentFailure.live("session.processor effect tests retain partial legacy par
         expect(seen.filter((type) => type.startsWith("session.next."))).toEqual([])
       }),
     { config: cfg },
+  ),
+)
+
+// TODO: restore the cross-provider failover case once SiliconFlow has a
+// verified free model in the catalog (ModelScope removed: mandatory
+// payment card on account creation violates FREE-ONLY). Do not invent
+// a SiliconFlow model id to make this pass.
+it.live("session.processor retries same model on 429 with no fallback target", () =>
+  provideTmpdirServer(
+    ({ dir, llm }) =>
+      Effect.gen(function* () {
+        const { processors, session, provider } = yield* boot()
+
+        yield* llm.error(429, { error: { message: "rate limit exceeded" } })
+        yield* llm.text("after")
+
+        const chat = yield* session.create({})
+        const parent = yield* user(chat.id, "fallback")
+        const msg = yield* assistant(chat.id, parent.id, path.resolve(dir))
+        const mdl = yield* provider.getModel(ProviderV2.ID.make("openrouter"), ModelV2.ID.make("cohere/north-mini-code:free"))
+        const handle = yield* processors.create({
+          assistantMessage: msg,
+          sessionID: chat.id,
+          model: mdl,
+        })
+
+        const value = yield* handle.process({
+          user: {
+            id: parent.id,
+            sessionID: chat.id,
+            role: "user",
+            time: parent.time,
+            agent: parent.agent,
+            model: {
+              providerID: ProviderV2.ID.make("openrouter"),
+              modelID: ModelV2.ID.make("cohere/north-mini-code:free"),
+            },
+          } satisfies SessionV1.User,
+          sessionID: chat.id,
+          model: mdl,
+          agent: agent(),
+          system: [],
+          messages: [{ role: "user", content: "fallback" }],
+          tools: {},
+        })
+
+        const parts = yield* MessageV2.parts(msg.id)
+
+        expect(value).toBe("continue")
+        expect(yield* llm.calls).toBe(2)
+        expect(parts.some((part) => part.type === "text" && part.text === "after")).toBe(true)
+        expect(handle.message.error).toBeUndefined()
+        expect(handle.message.providerID).toBe(ref.providerID)
+        expect(handle.message.modelID).toBe(ref.modelID)
+      }),
+    { config: (url) => fallbackCfg(url) },
+  ),
+)
+
+it.live("session.processor keeps same model when no fallback mapping exists", () =>
+  provideTmpdirServer(
+    ({ dir, llm }) =>
+      Effect.gen(function* () {
+        const { processors, session, provider } = yield* boot()
+
+        yield* llm.error(429, { error: { message: "rate limit exceeded" } })
+        yield* llm.text("recovered")
+
+        const chat = yield* session.create({})
+        const parent = yield* user(chat.id, "exhausted")
+        const msg = yield* assistant(chat.id, parent.id, path.resolve(dir))
+        const mdl = yield* provider.getModel(ref.providerID, ref.modelID)
+        const handle = yield* processors.create({
+          assistantMessage: msg,
+          sessionID: chat.id,
+          model: mdl,
+        })
+
+        const value = yield* handle.process({
+          user: {
+            id: parent.id,
+            sessionID: chat.id,
+            role: "user",
+            time: parent.time,
+            agent: parent.agent,
+            model: { providerID: ref.providerID, modelID: ref.modelID },
+          } satisfies SessionV1.User,
+          sessionID: chat.id,
+          model: mdl,
+          agent: agent(),
+          system: [],
+          messages: [{ role: "user", content: "exhausted" }],
+          tools: {},
+        })
+
+        const parts = yield* MessageV2.parts(msg.id)
+
+        expect(value).toBe("continue")
+        expect(yield* llm.calls).toBe(2)
+        expect(parts.some((part) => part.type === "text" && part.text === "recovered")).toBe(true)
+        expect(handle.message.error).toBeUndefined()
+        expect(handle.message.providerID).toBe(ref.providerID)
+        expect(handle.message.modelID).toBe(ref.modelID)
+      }),
+    { config: (url) => providerCfg(url) },
   ),
 )

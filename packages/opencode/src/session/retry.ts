@@ -184,6 +184,7 @@ export function policy(opts: {
   provider: string
   parse: (error: unknown) => Err
   set: (input: { attempt: number; message: string; action?: Retryable["action"]; next: number }) => Effect.Effect<void>
+  switchModel?: (error: Err, attempt: number) => Effect.Effect<void>
 }) {
   return Schedule.fromStepWithMetadata(
     Effect.succeed((meta: Schedule.InputMetadata<unknown>) => {
@@ -200,6 +201,7 @@ export function policy(opts: {
           action: retry.action,
           next: now + wait,
         })
+        if (opts.switchModel) yield* opts.switchModel(error, meta.attempt)
         return [meta.attempt, Duration.millis(wait)] as [number, Duration.Duration]
       })
     }),

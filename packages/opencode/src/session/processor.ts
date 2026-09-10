@@ -18,12 +18,15 @@ import type { SessionID } from "./schema"
 import { SessionRetry } from "./retry"
 import { SessionStatus } from "./status"
 import { SessionSummary } from "./summary"
-import type { Provider } from "@/provider/provider"
+import { Provider } from "@/provider/provider"
+import { ProviderFallback } from "@/provider/fallback"
 import { Question } from "@/question"
 import { errorMessage } from "@/util/error"
 import { isRecord } from "@/util/record"
 import { EventV2Bridge } from "@/event-v2-bridge"
 import { Database } from "@opencode-ai/core/database/database"
+import { ProviderV2 } from "@opencode-ai/core/provider"
+import { ModelV2 } from "@opencode-ai/core/model"
 import { Usage, type LLMEvent } from "@opencode-ai/llm"
 
 const DOOM_LOOP_THRESHOLD = 3
@@ -94,6 +97,7 @@ const layer = Layer.effect(
     const image = yield* Image.Service
     const events = yield* EventV2Bridge.Service
     const database = yield* Database.Service
+    const providers = yield* Provider.Service
 
     const create = Effect.fn("SessionProcessor.create")(function* (input: Input) {
       // Pre-capture snapshot before the LLM stream starts. The AI SDK
@@ -113,10 +117,11 @@ const layer = Layer.effect(
         reasoningMap: {},
       }
       let aborted = false
+      let activeProviderID = input.model.providerID
 
       const parse = (e: unknown) =>
         MessageV2.fromError(e, {
-          providerID: input.model.providerID,
+          providerID: activeProviderID,
           aborted,
         })
 
@@ -645,6 +650,26 @@ const layer = Layer.effect(
         })
         ctx.needsCompaction = false
         ctx.shouldBreak = (yield* config.get()).experimental?.continue_loop_on_deny !== true
+        const tried = new Set<string>([`${streamInput.model.providerID}/${streamInput.model.id}`])
+
+        const switchModel = (error: SessionRetry.Err, _attempt: number) =>
+          Effect.gen(function* () {
+            if (!ProviderFallback.isRateLimited(error)) return
+            const candidates = ProviderFallback.fallbacksFor(streamInput.model.providerID, streamInput.model.id, tried)
+            for (const candidate of candidates) {
+              const next = yield* providers
+                .getModel(ProviderV2.ID.make(candidate.providerID), ModelV2.ID.make(candidate.modelID))
+                .pipe(Effect.catchTag("ProviderModelNotFoundError", () => Effect.succeed(undefined)))
+              if (!next) continue
+              tried.add(`${next.providerID}/${next.id}`)
+              streamInput.model = next
+              ctx.model = next
+              activeProviderID = next.providerID
+              ctx.assistantMessage.modelID = next.id
+              ctx.assistantMessage.providerID = next.providerID
+              return
+            }
+          })
 
         return yield* Effect.gen(function* () {
           yield* Effect.gen(function* () {
@@ -684,6 +709,7 @@ const layer = Layer.effect(
                     next: info.next,
                   })
                 },
+                switchModel,
               }),
             ),
             Effect.catch(halt),
@@ -721,6 +747,7 @@ export const node = LayerNode.make({
     LLM.node,
     Permission.node,
     Plugin.node,
+    Provider.node,
     SessionSummary.node,
     SessionStatus.node,
     Image.node,
