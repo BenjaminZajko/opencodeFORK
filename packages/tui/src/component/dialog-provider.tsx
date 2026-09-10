@@ -390,6 +390,34 @@ function ApiMethod(props: ApiMethodProps) {
               </text>
             </box>
           ),
+          siliconflow: (
+            <box gap={1}>
+              <text fg={theme.text}>
+                Go to <span style={{ fg: theme.primary }}>https://cloud.siliconflow.com/account/ak</span> to get a key
+              </text>
+            </box>
+          ),
+          cerebras: (
+            <box gap={1}>
+              <text fg={theme.text}>
+                Go to <span style={{ fg: theme.primary }}>https://cloud.cerebras.ai</span> (API Keys) to get a key
+              </text>
+            </box>
+          ),
+          groq: (
+            <box gap={1}>
+              <text fg={theme.text}>
+                Go to <span style={{ fg: theme.primary }}>https://console.groq.com/keys</span> to get a key
+              </text>
+            </box>
+          ),
+          mistral: (
+            <box gap={1}>
+              <text fg={theme.text}>
+                Go to <span style={{ fg: theme.primary }}>https://console.mistral.ai</span> (API Keys) to get a key
+              </text>
+            </box>
+          ),
         })[props.providerID] ?? undefined
       }
       onConfirm={async (value) => {

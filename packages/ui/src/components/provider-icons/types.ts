@@ -45,7 +45,6 @@ export const iconNames = [
   "morph",
   "moonshotai",
   "moonshotai-cn",
-  "modelscope",
   "moark",
   "mistral",
   "minimax",
