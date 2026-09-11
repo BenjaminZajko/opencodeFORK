@@ -2424,6 +2424,13 @@ export type McpServerNotFoundError = {
   message: string
 }
 
+export type OnboardingError = {
+  name: "BadRequest" | "OnboardingOllamaMissing"
+  data: {
+    message?: string
+  }
+}
+
 export type Project = {
   id: string
   worktree: string
@@ -8704,6 +8711,168 @@ export type McpDisconnectResponses = {
 }
 
 export type McpDisconnectResponse = McpDisconnectResponses[keyof McpDisconnectResponses]
+
+export type OnboardingRecommendationData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/onboarding/recommendation"
+}
+
+export type OnboardingRecommendationErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+}
+
+export type OnboardingRecommendationError = OnboardingRecommendationErrors[keyof OnboardingRecommendationErrors]
+
+export type OnboardingRecommendationResponses = {
+  /**
+   * Hardware-aware model recommendation
+   */
+  200: {
+    profile: {
+      os?: string
+      cpu?: string
+      ramGb?: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+      gpu?: string
+      poolGb: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+    }
+    primaryLocal: {
+      id: string
+      kind: "local" | "cloud"
+      score: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+      fit: string
+      reasons: Array<string>
+      needGb?: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+    }
+    primaryCloud: {
+      id: string
+      kind: "local" | "cloud"
+      score: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+      fit: string
+      reasons: Array<string>
+      needGb?: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+    }
+    primary: "local" | "cloud"
+    alternates: Array<{
+      id: string
+      kind: "local" | "cloud"
+      score: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+      fit: string
+      reasons: Array<string>
+      needGb?: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+    }>
+    explanation: string
+  }
+}
+
+export type OnboardingRecommendationResponse =
+  OnboardingRecommendationResponses[keyof OnboardingRecommendationResponses]
+
+export type OnboardingOllamaData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/onboarding/ollama"
+}
+
+export type OnboardingOllamaErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+}
+
+export type OnboardingOllamaError = OnboardingOllamaErrors[keyof OnboardingOllamaErrors]
+
+export type OnboardingOllamaResponses = {
+  /**
+   * Ollama presence and pulled models
+   */
+  200: {
+    installed: boolean
+    models: Array<string>
+  }
+}
+
+export type OnboardingOllamaResponse = OnboardingOllamaResponses[keyof OnboardingOllamaResponses]
+
+export type OnboardingPullData = {
+  body?: {
+    model: string
+  }
+  path?: never
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/onboarding/pull"
+}
+
+export type OnboardingPullErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * OnboardingError
+   */
+  500: OnboardingError
+}
+
+export type OnboardingPullError = OnboardingPullErrors[keyof OnboardingPullErrors]
+
+export type OnboardingPullResponses = {
+  /**
+   * Success
+   */
+  200: string
+}
+
+export type OnboardingPullResponse = OnboardingPullResponses[keyof OnboardingPullResponses]
+
+export type OnboardingDefaultData = {
+  body?: {
+    connected: Array<string>
+    preferredTier?: string
+  }
+  path?: never
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/onboarding/default"
+}
+
+export type OnboardingDefaultErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+}
+
+export type OnboardingDefaultError = OnboardingDefaultErrors[keyof OnboardingDefaultErrors]
+
+export type OnboardingDefaultResponses = {
+  /**
+   * Ranked default model for connected providers
+   */
+  200: {
+    providerID: string
+    modelID: string
+  }
+}
+
+export type OnboardingDefaultResponse = OnboardingDefaultResponses[keyof OnboardingDefaultResponses]
 
 export type ProjectListData = {
   body?: never

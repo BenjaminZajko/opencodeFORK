@@ -27,6 +27,7 @@ import {
 import { TuiPathsProvider, TuiStartupProvider, TuiTerminalEnvironmentProvider, useTuiStartup } from "./context/runtime"
 import { DialogProvider, useDialog } from "./ui/dialog"
 import { DialogProvider as DialogProviderList } from "./component/dialog-provider"
+import { DialogOnboarding } from "./component/dialog-onboarding"
 import { ErrorComponent } from "./component/error-component"
 import { PluginRouteMissing } from "./component/plugin-route-missing"
 import { ProjectProvider, useProject } from "./context/project"
@@ -547,6 +548,18 @@ function App(props: { onSnapshot?: () => Promise<string[]>; pluginHost: TuiPlugi
       },
     ),
   )
+
+  // First-run onboarding: once ever, when no providers are connected.
+  // Created after the empty-provider popup so the one-screen
+  // recommendation takes precedence on first launch.
+  let onboardingShown = false
+  createEffect(() => {
+    if (onboardingShown || sync.status !== "complete" || sync.data.provider.length !== 0) return
+    if (kv.get("onboarding_seen", false)) return
+    onboardingShown = true
+    kv.set("onboarding_seen", true)
+    dialog.replace(() => <DialogOnboarding />)
+  })
 
   const connected = useConnected()
   const currentWorktreeWorkspace = createMemo(() => {

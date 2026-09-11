@@ -235,8 +235,9 @@ interface AutoMethodProps {
   providerID: string
   title: string
   authorization: ProviderAuthAuthorization
+  onConnected?: (providerID: string) => void
 }
-function AutoMethod(props: AutoMethodProps) {
+export function AutoMethod(props: AutoMethodProps) {
   const { theme } = useTheme()
   const sdk = useSDK()
   const dialog = useDialog()
@@ -280,6 +281,10 @@ function AutoMethod(props: AutoMethodProps) {
     }
     await sdk.client.instance.dispose()
     await sync.bootstrap()
+    if (props.onConnected) {
+      props.onConnected(props.providerID)
+      return
+    }
     dialog.replace(() => <DialogModel providerID={props.providerID} />)
   })
 
@@ -310,8 +315,9 @@ interface CodeMethodProps {
   title: string
   providerID: string
   authorization: ProviderAuthAuthorization
+  onConnected?: (providerID: string) => void
 }
-function CodeMethod(props: CodeMethodProps) {
+export function CodeMethod(props: CodeMethodProps) {
   const { theme } = useTheme()
   const sdk = useSDK()
   const sync = useSync()
@@ -331,6 +337,10 @@ function CodeMethod(props: CodeMethodProps) {
         if (!error) {
           await sdk.client.instance.dispose()
           await sync.bootstrap()
+          if (props.onConnected) {
+            props.onConnected(props.providerID)
+            return
+          }
           dialog.replace(() => <DialogModel providerID={props.providerID} />)
           return
         }
@@ -465,7 +475,7 @@ interface PromptsMethodProps {
   dialog: ReturnType<typeof useDialog>
   prompts: NonNullable<ProviderAuthMethod["prompts"]>[number][]
 }
-async function PromptsMethod(props: PromptsMethodProps) {
+export async function PromptsMethod(props: PromptsMethodProps) {
   const inputs: Record<string, string> = {}
   for (const prompt of props.prompts) {
     if (prompt.when) {

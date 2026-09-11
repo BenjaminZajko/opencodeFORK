@@ -113,6 +113,14 @@ import type {
   McpStatusResponses,
   ModelRef,
   MoveSessionDestination,
+  OnboardingDefaultErrors,
+  OnboardingDefaultResponses,
+  OnboardingOllamaErrors,
+  OnboardingOllamaResponses,
+  OnboardingPullErrors,
+  OnboardingPullResponses,
+  OnboardingRecommendationErrors,
+  OnboardingRecommendationResponses,
   OutputFormat,
   Part as Part2,
   PartDeleteErrors,
@@ -2524,6 +2532,148 @@ export class Mcp extends HeyApiClient {
   private _auth?: Auth2
   get auth(): Auth2 {
     return (this._auth ??= new Auth2({ client: this.client }))
+  }
+}
+
+export class Onboarding extends HeyApiClient {
+  /**
+   * Get onboarding recommendation
+   *
+   * Detect host hardware and recommend a local Ollama model and a free cloud fallback.
+   */
+  public recommendation<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      workspace?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<
+      OnboardingRecommendationResponses,
+      OnboardingRecommendationErrors,
+      ThrowOnError
+    >({
+      url: "/onboarding/recommendation",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Check Ollama status
+   *
+   * Check whether Ollama is installed and which models are pulled.
+   */
+  public ollama<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      workspace?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<OnboardingOllamaResponses, OnboardingOllamaErrors, ThrowOnError>({
+      url: "/onboarding/ollama",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Pull an Ollama model
+   *
+   * Stream `ollama pull` progress as server-sent events.
+   */
+  public pull<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      workspace?: string
+      model?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+            { in: "body", key: "model" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).sse.post<OnboardingPullResponses, OnboardingPullErrors, ThrowOnError>({
+      url: "/onboarding/pull",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Resolve ranked default model
+   *
+   * Pick the best fallback-catalog model for the connected providers, no browsing required.
+   */
+  public default<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      workspace?: string
+      connected?: Array<string>
+      preferredTier?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+            { in: "body", key: "connected" },
+            { in: "body", key: "preferredTier" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<OnboardingDefaultResponses, OnboardingDefaultErrors, ThrowOnError>({
+      url: "/onboarding/default",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
   }
 }
 
@@ -7165,6 +7315,11 @@ export class OpencodeClient extends HeyApiClient {
   private _mcp?: Mcp
   get mcp(): Mcp {
     return (this._mcp ??= new Mcp({ client: this.client }))
+  }
+
+  private _onboarding?: Onboarding
+  get onboarding(): Onboarding {
+    return (this._onboarding ??= new Onboarding({ client: this.client }))
   }
 
   private _project?: Project
