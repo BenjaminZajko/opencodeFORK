@@ -7,6 +7,7 @@ import { useLocal } from "../context/local"
 import { useSDK } from "../context/sdk"
 import { useSync } from "../context/sync"
 import { DialogModel } from "./dialog-model"
+import { DialogProvider } from "./dialog-provider"
 import { DialogVariant } from "./dialog-variant"
 import { AutoMethod, CodeMethod, PromptsMethod } from "./dialog-provider"
 import type {
@@ -31,10 +32,12 @@ function useRankedModel(providerID: string, modelID: string) {
 
 function OnboardingConfirm(props: { providerID: string; modelID: string; connectedProviderID: string }) {
   const dialog = useDialog()
+  const sync = useSync()
   const use = useRankedModel(props.providerID, props.modelID)
+  const providerName = () => sync.data.provider_next.all.find((p) => p.id === props.providerID)?.name ?? props.providerID
   return (
     <DialogSelect
-      title={`Use ${props.providerID}/${props.modelID}?`}
+      title={`Use ${props.modelID} on ${providerName()}?`}
       options={[
         {
           title: `Use ${props.modelID}`,
@@ -181,7 +184,9 @@ export function DialogOnboarding() {
   })
 
   createEffect(() => {
-    if (failed()) dialog.clear()
+    // Recommendation failed: fall back to the normal empty-provider flow
+    // so the user always lands somewhere useful instead of nothing.
+    if (failed()) dialog.replace(() => <DialogProvider />)
   })
 
   async function afterCloudConnect(providerID: string) {
