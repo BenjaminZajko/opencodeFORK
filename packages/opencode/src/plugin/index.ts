@@ -25,6 +25,8 @@ import { OpenRouterAuthPlugin } from "./openrouter"
 import { CerebrasAuthPlugin, CerebrasPlugin } from "./cerebras"
 import { GroqAuthPlugin } from "./groq"
 import { MistralAuthPlugin } from "./mistral"
+import { NvidiaAuthPlugin } from "./nvidia"
+import { Llm7AuthPlugin } from "./llm7"
 import { SnowflakeCortexAuthPlugin } from "./snowflake-cortex"
 import { Effect, Layer, Context } from "effect"
 import { EffectBridge } from "@/effect/bridge"
@@ -91,6 +93,8 @@ function internalPlugins(flags: RuntimeFlags.Info): PluginInstance[] {
     CerebrasAuthPlugin,
     GroqAuthPlugin,
     MistralAuthPlugin,
+    NvidiaAuthPlugin,
+    Llm7AuthPlugin,
   ]
 }
 

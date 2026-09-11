@@ -23,8 +23,26 @@ describe("ProviderFallback catalog", () => {
     // cohere/north-mini-code:free with carried-over scores; gpt-oss-120b
     // tracks Groq's $0-by-tier Free plan the same way, as does codestral
     // for Mistral Free mode (re-benchmark pending for all carried-over
-    // scores).
-    expect(Object.keys(byId)).toEqual(["qwen3-coder", "gpt-oss-120b", "codestral"])
+    // scores). kimi-k2.6 tracks NVIDIA NIM's $0-by-tier trial: it is live-served,
+    // snapshot-present (flagged deprecated, hence the static-hook status
+    // override), and snapshot-$0; deepseek-v4-pro-0813 is the stronger
+    // coder, absent from the snapshot, resolving via the same static hook
+    // with upstream-pinned limits.
+    expect(Object.keys(byId)).toEqual(["qwen3-coder", "gpt-oss-120b", "codestral", "kimi-k2.6", "deepseek-v4-pro"])
+    expect(byId["deepseek-v4-pro"]).toMatchObject({
+      codingScore: 9.5,
+      agenticScore: 9.3,
+      contextWindow: 1000000,
+      tier: "strong",
+    })
+    expect(byId["deepseek-v4-pro"].providers).toEqual(["nvidia"])
+    expect(byId["kimi-k2.6"]).toMatchObject({
+      codingScore: 9.4,
+      agenticScore: 9.0,
+      contextWindow: 262144,
+      tier: "strong",
+    })
+    expect(byId["kimi-k2.6"].providers).toEqual(["nvidia"])
     expect(byId["qwen3-coder"]).toMatchObject({
       codingScore: 9.4,
       agenticScore: 9.0,
@@ -49,7 +67,13 @@ describe("ProviderFallback catalog", () => {
   })
 
   it("ranks by coding, then agentic, then context", () => {
-    expect(rank(CATALOG).map((e) => e.id)).toEqual(["qwen3-coder", "gpt-oss-120b", "codestral"])
+    expect(rank(CATALOG).map((e) => e.id)).toEqual([
+      "deepseek-v4-pro",
+      "kimi-k2.6",
+      "qwen3-coder",
+      "gpt-oss-120b",
+      "codestral",
+    ])
   })
 })
 
@@ -122,6 +146,13 @@ describe("rankedDefault", () => {
     })
   })
 
+  it("nvidia-only users start on the top-ranked free entry", () => {
+    expect(rankedDefault(new Set(["nvidia"]))).toEqual({
+      providerID: "nvidia",
+      modelID: "deepseek-ai/deepseek-v4-pro-0813",
+    })
+  })
+
   it("falls back across tiers when the preferred tier has no entry", () => {
     expect(rankedDefault(new Set(["openrouter"]), CATALOG, "fast")).toEqual({
       providerID: "openrouter",
@@ -149,6 +180,10 @@ describe("concrete ids against models-api.json", () => {
     const fixture = await Bun.file(new URL("../tool/fixtures/models-api.json", import.meta.url)).json()
     for (const entry of CATALOG) {
       for (const providerID of entry.providers) {
+        // nvidia concretes resolve via the NvidiaAuthPlugin static hook,
+        // not the snapshot (deepseek-v4-pro-0813 is absent there) — covered
+        // by the live-fixture guard and the static-hook test instead.
+        if (providerID === "nvidia") continue
         const modelID = entry.concrete[providerID]
         expect(modelID).toBeDefined()
         const models = fixture[providerID]?.models ?? {}
@@ -183,6 +218,16 @@ describe("concrete ids against models-api.json", () => {
     const servedIDs = new Set((served.models as { id: string }[]).map((m) => m.id))
     for (const entry of CATALOG) {
       const modelID = entry.concrete["mistral"]
+      if (!modelID) continue
+      expect(servedIDs.has(modelID)).toBe(true)
+    }
+  })
+
+  it("every nvidia concrete id is in the live-cached served list", async () => {
+    const served = await Bun.file(new URL("../tool/fixtures/nvidia-nim-models.json", import.meta.url)).json()
+    const servedIDs = new Set((served.models as { id: string }[]).map((m) => m.id))
+    for (const entry of CATALOG) {
+      const modelID = entry.concrete["nvidia"]
       if (!modelID) continue
       expect(servedIDs.has(modelID)).toBe(true)
     }

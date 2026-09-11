@@ -418,6 +418,21 @@ function ApiMethod(props: ApiMethodProps) {
               </text>
             </box>
           ),
+          nvidia: (
+            <box gap={1}>
+              <text fg={theme.text}>
+                Go to <span style={{ fg: theme.primary }}>https://build.nvidia.com/settings</span> (API Keys) to get
+                a key
+              </text>
+            </box>
+          ),
+          llm7: (
+            <box gap={1}>
+              <text fg={theme.text}>
+                Go to <span style={{ fg: theme.primary }}>https://dash.llm7.io</span> for a free token
+              </text>
+            </box>
+          ),
         })[props.providerID] ?? undefined
       }
       onConfirm={async (value) => {

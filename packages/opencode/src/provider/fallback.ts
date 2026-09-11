@@ -22,6 +22,17 @@
 // snapshot lists zai-glm-4.7). Do not add without re-verifying $0
 // pricing AND ungated access.
 //
+// LLM7.io was evaluated 2026-09-10 and REJECTED for the catalog:
+// the free-token tier is $0 and ungated (verified via live catalog +
+// docs; usage_based_only:true models are paid-only, leaving
+// codestral-latest viable) — but no llm7 provider section exists in
+// the models.dev snapshot or upstream, and getModel does strict
+// lookup, so any concrete would be unresolvable without a static hook
+// carrying an invented output cap. Snapshot cached in
+// test/tool/fixtures/llm7-models.json. Revisit if upstream gains an
+// llm7 section (then extend the codestral entry's providers,
+// same-model-different-provider design).
+//
 // FREE-ONLY DISCIPLINE: every concrete id below must be verifiably
 // zero-cost, or it is dropped rather than shipped silently requiring
 // payment (same rule as unverified ids):
@@ -108,6 +119,42 @@ export const CATALOG: Entry[] = [
     providers: ["mistral"],
     concrete: {
       mistral: "codestral-latest",
+    },
+  },
+  // NVIDIA NIM free trial is $0 by tier structure (verified 2026-09-10
+  // against the live unauthenticated GET /v1/models: 80 served ids, no
+  // per-model prices): no credit card required, rate-limited with no
+  // time limit (per NVIDIA forum staff); signup needs phone
+  // verification. deepseek-ai/deepseek-v4-pro-0813 is the strongest
+  // coder served but is absent from the snapshot, so it resolves via
+  // the NvidiaAuthPlugin static hook (context/output pinned from
+  // upstream models.dev, same trust tier as snapshot values).
+  // moonshotai/kimi-k2.6 is snapshot-present but flagged deprecated
+  // (pruned at runtime), so it resolves via the same hook with status
+  // overridden to active — the live endpoint serves it today. Scores
+  // carried over with re-benchmark pending (same convention as
+  // qwen3-coder); contextWindows are the database values. Served ids
+  // cached in test/tool/fixtures/nvidia-nim-models.json.
+  {
+    id: "kimi-k2.6",
+    codingScore: 9.4,
+    agenticScore: 9.0,
+    contextWindow: 262144,
+    tier: "strong",
+    providers: ["nvidia"],
+    concrete: {
+      nvidia: "moonshotai/kimi-k2.6",
+    },
+  },
+  {
+    id: "deepseek-v4-pro",
+    codingScore: 9.5,
+    agenticScore: 9.3,
+    contextWindow: 1000000,
+    tier: "strong",
+    providers: ["nvidia"],
+    concrete: {
+      nvidia: "deepseek-ai/deepseek-v4-pro-0813",
     },
   },
 ]
