@@ -26,7 +26,6 @@ import {
 import { TuiPathsProvider, TuiStartupProvider, TuiTerminalEnvironmentProvider, useTuiStartup } from "./context/runtime"
 import { DialogProvider, useDialog } from "./ui/dialog"
 import { DialogProvider as DialogProviderList } from "./component/dialog-provider"
-import { DialogOnboarding } from "./component/dialog-onboarding"
 import { ErrorComponent } from "./component/error-component"
 import { PluginRouteMissing } from "./component/plugin-route-missing"
 import { ProjectProvider, useProject } from "./context/project"
@@ -535,21 +534,6 @@ function App(props: { onSnapshot?: () => Promise<string[]>; pluginHost: TuiPlugi
         toast.show({ message: "Failed to fork session", variant: "error" })
       }
     })
-  })
-
-  // First-run onboarding: once ever, when no provider is connected.
-  // Gates on the same derived connected() check the tips/sidebar nudges
-  // use — the provider list is never empty (the built-in opencode entry
-  // is always present), so a length check can never fire. Replaces the
-  // old empty-provider popup, whose dead length===0 condition never
-  // triggered either.
-  let onboardingShown = false
-  createEffect(() => {
-    if (onboardingShown || sync.status !== "complete" || connected()) return
-    if (kv.get("onboarding_seen", false)) return
-    onboardingShown = true
-    kv.set("onboarding_seen", true)
-    dialog.replace(() => <DialogOnboarding />)
   })
 
   const connected = useConnected()
