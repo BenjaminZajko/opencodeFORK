@@ -77,4 +77,4 @@ case ":$PATH:" in
     ;;
 esac
 printf 'Installed OliveCode %s. Run olivecode in any project folder.\n' "$version"
-printf 'For this terminal now: export PATH="$HOME/.local/bin:$PATH"\n' 
+printf 'For this terminal now: export PATH="$HOME/.local/bin:$PATH"\n'
