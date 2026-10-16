@@ -1,9 +1,10 @@
-async page => {
+async (page, options = {}) => {
   const base = 'http://127.0.0.1:8765';
   const errors = [];
   page.on('pageerror', error => errors.push(String(error)));
   await page.goto(base);
-  if (!(await page.getByRole('button', {name:'Copy install command'}).isDisabled())) throw new Error('Preview copy must be disabled');
+  const releaseReady = options.releaseReady === true;
+  if ((await page.getByRole('button', {name:'Copy install command'}).isDisabled()) === releaseReady) throw new Error(releaseReady ? 'Published install copy must be enabled' : 'Preview copy must be disabled');
   await page.getByRole('radio', {name:'Windows'}).check();
   if (!(await page.locator('#install-command').textContent()).startsWith('irm ')) throw new Error('Wrong Windows command');
   await page.getByRole('radio', {name:'Windows'}).press('ArrowLeft');
@@ -40,5 +41,5 @@ async page => {
   if ((await page.evaluate(()=>String(getSelection()))) !== 'irm https://install.test/install.ps1 | iex') throw new Error('Copy fallback failed');
   await page.unroute('**/config.js*');
   if (errors.length) throw new Error(errors.join('\n'));
-  return {passed:true,layouts,checks:['preview disabled','Windows command','keyboard OS selection','Windows detection','copy success','direct copy fallback','manual copy fallback','guide navigation','no browser errors']};
+  return {passed:true,layouts,checks:[releaseReady ? 'published install enabled' : 'preview disabled','Windows command','keyboard OS selection','Windows detection','copy success','direct copy fallback','manual copy fallback','guide navigation','no browser errors']};
 }

@@ -38,6 +38,8 @@ jobs:
         working-directory: packages/core
       - run: bun test test --only-failures
         working-directory: distribution
+      - run: bun test ./install.test.ts ./launch.test.ts
+        working-directory: site
       - name: Check OliveCode features
         working-directory: packages/opencode
         run: bun test test/onboarding test/computer test/remote test/provider/free-models.test.ts test/provider/cooldown.test.ts test/provider/fallback.test.ts test/auth/migrate.test.ts test/plugin/openrouter.test.ts test/plugin/openrouter-callback.test.ts test/plugin/nvidia.test.ts test/session/prompt.test.ts test/session/processor-effect.test.ts test/session/message-v2.test.ts test/session/retry.test.ts test/session/ollama-tool-repair.test.ts test/session/repetition.test.ts test/tool/desktop.test.ts test/tool/registry.test.ts --timeout 30000 --only-failures

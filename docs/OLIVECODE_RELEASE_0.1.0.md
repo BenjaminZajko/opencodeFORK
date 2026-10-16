@@ -24,6 +24,6 @@ The distribution is not Developer ID notarized or Authenticode signed. Published
 
 All builds use an OliveCode channel, including plain semver releases. The upstream updater remains disabled. Every native build must pass version, help and safe upgrade checks; non-musl binaries also run compiled chat/tool/Assist integration. Unix and Windows installers reject replacing an existing version with different contents.
 
-## Pending external step
+## Publication status
 
-GitHub rejected pushing workflow files because the saved OAuth login lacks workflow scope. User was asked to refresh GitHub CLI authorization; publication remains pending.
+GitHub CLI workflow authorization was completed, the release branch was pushed, and hosted quality checks have started. Publication remains gated on successful native platform checks and verification of the public release assets.

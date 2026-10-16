@@ -14,7 +14,7 @@ const base = process.env.OLIVECODE_TEST_ORIGIN || 'http://127.0.0.1:8765';
       });
       const page = await context.newPage();
       const run = eval('('+fs.readFileSync(path.join(__dirname,name),'utf8').replaceAll('http://127.0.0.1:8765',base)+')');
-      const result = await run(page);
+      const result = await run(page, {releaseReady:process.env.OLIVECODE_TEST_RELEASE_READY === 'true'});
       const violations = await page.evaluate(() => window.securityViolations);
       if(violations.length) throw Error('CSP: '+violations.join(', '));
       console.log(JSON.stringify({test:name,...result}));

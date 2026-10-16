@@ -23,7 +23,7 @@ jobs:
       OLIVECODE_SITE_HOST: Cloudflare Pages
       OLIVECODE_PUBLIC_ORIGIN: https://olivecode.dev
       OLIVECODE_RELEASE_READY: ${{ inputs.enable_downloads }}
-      OLIVECODE_RELEASE_VERIFICATION: ${{ runner.temp }}/olivecode-release.json
+      OLIVECODE_RELEASE_VERIFICATION: ${{ github.workspace }}/olivecode-release.json
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
