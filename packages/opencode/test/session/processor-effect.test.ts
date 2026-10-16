@@ -108,6 +108,7 @@ function fallbackCfg(url: string) {
         id: "openrouter",
         env: [],
         npm: "@ai-sdk/openai-compatible",
+        whitelist: ["cohere/north-mini-code:free"],
         models: { "cohere/north-mini-code:free": model("cohere/north-mini-code:free") },
         options,
       },
@@ -1374,8 +1375,8 @@ for (const cooling of [false, true]) {
           return {
             provider: {
               ...config.provider,
-              groq: { ...base, id: "groq", models: { "openai/gpt-oss-120b": { ...model, id: "openai/gpt-oss-120b" } } },
-              mistral: { ...base, id: "mistral", models: { "codestral-latest": { ...model, id: "codestral-latest" } } },
+              groq: { ...base, id: "groq", whitelist: ["openai/gpt-oss-120b"], models: { "openai/gpt-oss-120b": { ...model, id: "openai/gpt-oss-120b" } } },
+              mistral: { ...base, id: "mistral", whitelist: ["codestral-latest"], models: { "codestral-latest": { ...model, id: "codestral-latest" } } },
             },
           }
         },
