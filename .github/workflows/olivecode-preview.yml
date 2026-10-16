@@ -38,6 +38,7 @@ jobs:
         working-directory: packages/core
       - run: bun test test --only-failures
         working-directory: distribution
+      - run: bun install --cwd site --frozen-lockfile
       - run: bun test ./install.test.ts ./launch.test.ts
         working-directory: site
       - name: Check OliveCode features
