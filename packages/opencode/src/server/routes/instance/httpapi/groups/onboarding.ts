@@ -25,6 +25,10 @@ const RankedPick = Schema.Struct({
   fit: Schema.String,
   reasons: Schema.Array(Schema.String),
   needGb: Schema.optional(Schema.Number),
+  name: Schema.optional(Schema.String),
+  variant: Schema.optional(Schema.String),
+  downloadGb: Schema.optional(Schema.Number),
+  compatible: Schema.optional(Schema.Boolean),
 })
 
 export const OnboardingApi = HttpApi.make("onboarding")
@@ -41,12 +45,15 @@ export const OnboardingApi = HttpApi.make("onboarding")
                 ramGb: Schema.optional(Schema.Number),
                 gpu: Schema.optional(Schema.String),
                 poolGb: Schema.Number,
+                diskFreeGb: Schema.optional(Schema.Number),
               }),
               primaryLocal: Schema.UndefinedOr(RankedPick),
               primaryCloud: Schema.UndefinedOr(RankedPick),
               primary: Schema.NullOr(Schema.Literals(["local", "cloud"])),
               alternates: Schema.Array(RankedPick),
               explanation: Schema.String,
+              catalog: Schema.Array(RankedPick),
+              reviewed: Schema.String,
             }),
             "Hardware-aware model recommendation",
           ),
@@ -63,6 +70,17 @@ export const OnboardingApi = HttpApi.make("onboarding")
             Schema.Struct({
               installed: Schema.Boolean,
               models: Schema.Array(Schema.String),
+              running: Schema.Boolean,
+              error: Schema.optional(Schema.String),
+              details: Schema.Array(
+                Schema.Struct({
+                  id: Schema.String,
+                  sizeGb: Schema.Number,
+                  cloud: Schema.Boolean,
+                  quantization: Schema.optional(Schema.String),
+                  parameters: Schema.optional(Schema.String),
+                }),
+              ),
             }),
             "Ollama presence and pulled models",
           ),
@@ -72,6 +90,29 @@ export const OnboardingApi = HttpApi.make("onboarding")
             summary: "Check Ollama status",
             description: "Check whether Ollama is installed and which models are pulled.",
           }),
+        ),
+        HttpApiEndpoint.post("localModel", `${root}/local-model`, {
+          query: WorkspaceRoutingQuery,
+          payload: Schema.Struct({ model: Schema.String }),
+          success: Schema.Struct({
+            id: Schema.String,
+            baseURL: Schema.String,
+            context: Schema.Number,
+            tools: Schema.Boolean,
+            reasoning: Schema.Boolean,
+            vision: Schema.Boolean,
+          }),
+          error: OnboardingApiError,
+        }).annotateMerge(
+          OpenApi.annotations({ identifier: "onboarding.localModel", summary: "Inspect a downloaded local model" }),
+        ),
+        HttpApiEndpoint.delete("deleteModel", `${root}/local-model`, {
+          query: WorkspaceRoutingQuery,
+          payload: Schema.Struct({ model: Schema.String }),
+          success: Schema.Boolean,
+          error: OnboardingApiError,
+        }).annotateMerge(
+          OpenApi.annotations({ identifier: "onboarding.deleteModel", summary: "Delete one installed Ollama model" }),
         ),
         HttpApiEndpoint.post("pull", `${root}/pull`, {
           query: WorkspaceRoutingQuery,
@@ -92,9 +133,7 @@ export const OnboardingApi = HttpApi.make("onboarding")
             preferredTier: Schema.optional(Schema.String),
           }),
           success: described(
-            Schema.UndefinedOr(
-              Schema.Struct({ providerID: Schema.String, modelID: Schema.String }),
-            ),
+            Schema.UndefinedOr(Schema.Struct({ providerID: Schema.String, modelID: Schema.String })),
             "Ranked default model for connected providers",
           ),
         }).annotateMerge(

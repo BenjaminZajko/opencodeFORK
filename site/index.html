@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="color-scheme" content="light dark"><meta name="theme-color" content="#171717" media="(prefers-color-scheme: dark)"><meta name="theme-color" content="#fafafa" media="(prefers-color-scheme: light)"><meta name="description" content="AI coding agents that read your project, edit files and run checks. Build with free models, control websites and Mac apps, or send tasks from Telegram."><title>OliveCode | Free AI in your terminal</title><link rel="icon" href="./favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="./style.css"></head><body>
+<a class="skip-link" href="#content">Skip to content</a>
+<header class="nav shell"><a class="wordmark" href="./index.html" aria-label="OliveCode home" translate="no"><picture><source media="(prefers-color-scheme: light)" srcset="./assets/olive-light.svg"><img src="./assets/olive-dark.svg" width="38" height="32" alt=""></picture><span>OliveCode</span></a><nav aria-label="Main navigation"><a href="./guide.html">Guide</a><a href="https://github.com/BenjaminZajko/opencodeFORK">GitHub</a></nav></header>
+<main id="content"><div class="grove-stage">
+<div class="grove-art" aria-hidden="true"><picture><source media="(prefers-color-scheme: dark)" srcset="./assets/grove-scene.webp"><img class="grove-trees" src="./assets/grove.webp" width="1536" height="1024" alt=""></picture><canvas id="grove-canvas"></canvas></div>
+<section class="install-hero shell" id="install" aria-labelledby="headline">
+<h1 id="headline"><span class="sr-only" translate="no">OliveCode</span><picture aria-hidden="true"><source media="(prefers-color-scheme: light)" srcset="./assets/logo-light.svg"><img class="hero-logo" src="./assets/logo-dark.svg" width="670" height="140" alt="" fetchpriority="high"></picture></h1>
+<p class="intro">AI coding agents. Free models. Your terminal.</p>
+<div class="installer">
+<div class="installer-bar"><fieldset class="os-switch"><legend class="sr-only">Choose your operating system</legend><label><input type="radio" name="os" value="mac" checked><span>macOS</span></label><label><input type="radio" name="os" value="windows"><span>Windows</span></label><label><input type="radio" name="os" value="linux"><span>Linux</span></label></fieldset><span id="shell-label" class="shell-label">Terminal</span></div>
+<div class="command-row"><span id="prompt-sign" aria-hidden="true">$</span><code id="install-command" translate="no">curl -fsSL https://olivecode.dev/install | sh</code><button type="button" id="copy-command" disabled>Copy<span class="sr-only"> install command</span></button></div>
+<p id="install-status" class="install-status" role="status" aria-live="polite">Preview. Installer not published yet.</p>
+</div>
+<p class="next-step" id="install-help">Open your project folder in Terminal and run <code translate="no">olivecode</code>.</p>
+<a class="guide-link" href="./guide.html">Installation guide</a>
+</section></div>
+<section class="product-section botanical-chapter" aria-labelledby="product-heading">
+<img class="chapter-art" src="./assets/product-grove.webp" width="1536" height="1024" loading="lazy" alt="" aria-hidden="true">
+<div class="shell product-inner">
+<div class="product-copy" data-reveal><h2 id="product-heading">Describe it. <span>Build it in your terminal.</span></h2>
+<p class="chapter-lead">Agents that read your project, edit files and run checks.</p><p class="chapter-detail">Connect a free cloud account or choose a local model. Then tell OliveCode what to build or fix.</p></div>
+<figure class="product-shot"><a href="./assets/app-welcome.webp" target="_blank" rel="noopener" aria-label="View full-size OliveCode welcome screen"><img src="./assets/app-welcome.webp" width="1264" height="648" loading="lazy" decoding="async" alt="The actual OliveCode welcome screen, with its olive logo, first-run setup guide, prompt field, and Assist, Cloud and Local controls."></a><figcaption>OliveCode, running in the terminal. <a href="./assets/app-welcome.webp" target="_blank" rel="noopener">View full size ↗</a></figcaption></figure>
+<div class="task-example" aria-label="Example coding request"><span>Try a task</span><code>Add a sign-in page that matches this project.</code><span class="task-arrow" aria-hidden="true">↵</span></div>
+<dl class="benefits" data-reveal><div><dt>Code in your project.</dt><dd>Describe the change. Agents explore your files and use tools to make it happen.</dd></div><div><dt>More than one perspective.</dt><dd>Assist adds planning, a second opinion and follow-through reviews. Turn it on or off beside your prompt.</dd></div><div><dt>Stay in control.</dt><dd>See the result first. Expand the commands and work details, or switch between cloud and local models.</dd></div></dl>
+</div></section>
+<section class="remote-chapter botanical-chapter" id="remote" aria-labelledby="remote-heading">
+<div class="shell remote-layout">
+<div class="remote-copy" data-reveal><p class="feature-kicker">OliveCode, beyond your terminal</p><h2 id="remote-heading">Out for a walk.<br><em>Still making progress.</em></h2>
+<p class="chapter-lead">Send a task from Telegram.<br>Your computer takes it from there.</p>
+<p class="chapter-detail">Work on your project, use websites, or control Mac apps. Review approvals and get the result back on your phone.</p>
+<a class="feature-link" href="./guide.html#remote">Connect your phone <span aria-hidden="true">↗</span></a>
+<p class="remote-requirement">Your computer stays on, awake and connected, with OliveCode Remote running.</p></div>
+<figure class="remote-scene" data-reveal aria-label="Illustrated example of a Telegram task and the resulting TextEdit document">
+<div class="remote-desktop"><div class="demo-titlebar"><span class="demo-olive" aria-hidden="true">◕</span><span>OliveCode · Mac apps</span><span class="demo-status">Verified</span></div><div class="demo-document"><span class="document-title">Untitled · TextEdit</span><p>Hello from OliveCode<span class="demo-caret" aria-hidden="true"></span></p><span class="document-note">Text verified · left unsaved</span></div></div>
+<div class="remote-phone"><div class="phone-speaker" aria-hidden="true"></div><div class="phone-header"><img src="./assets/olive-dark.svg" width="30" height="25" alt=""><div>OliveCode<small>on Telegram</small></div></div><div class="phone-messages"><p class="phone-message sent">Open TextEdit, type “Hello from OliveCode”, and leave it unsaved.</p><div class="phone-approval"><span>Desktop approval</span><strong>Allow for 90 min</strong><small>You decide what runs.</small></div><p class="phone-message received">Typed and verified.<br>The document is unsaved.</p></div></div>
+<figcaption>Example workflow · you choose the task and approve the actions.</figcaption></figure>
+</div>
+<div class="shell control-story" aria-labelledby="control-heading"><div class="control-heading" data-reveal><h3 id="control-heading">Watch it work. Or keep working.</h3><p>Choose how OliveCode uses your computer.</p></div>
+<fieldset class="control-picker"><legend class="sr-only">Computer control mode</legend><label><input type="radio" name="control-mode" value="visible" checked><span>Visible control</span></label><label><input type="radio" name="control-mode" value="browser"><span>Background browser</span></label><label><input type="radio" name="control-mode" value="mac"><span>Isolated Mac</span></label></fieldset>
+<div class="control-description" id="control-description" aria-live="polite"><strong>Websites and Mac apps, in front of you.</strong><p>Watch the pointer move smoothly and short text appear as it types. Visible Mac control shares your mouse and keyboard.</p></div>
+<div class="control-safety"><p><strong>Your account. Your approval.</strong> Only your paired private Telegram account can send tasks. Allow once or for 90 minutes in the current project and mode. Screen captures still ask separately.</p><p><code>/stop</code> ends the task. <code>/lock</code> cancels timed approval. <a href="./guide.html#computer">Read the guide ↗</a></p></div>
+</div></section>
+<section class="flow-chapter botanical-chapter" aria-labelledby="flow-heading">
+<img class="chapter-art" src="./assets/model-grove.webp" width="1536" height="1024" loading="lazy" alt="" aria-hidden="true">
+<div class="shell">
+<div class="flow-story" data-reveal><h2 id="flow-heading">No OliveCode credits<br>to run out of.</h2><p class="chapter-lead">Free models. Automatic switching. More room to build.</p>
+<p class="chapter-detail">When a cloud model hits its limit, OliveCode tries the next ranked free model from your connected providers.</p>
+<figure class="model-route" aria-label="Automatic switching: a recommended free model reaches a provider limit, then OliveCode tries an available free alternative.">
+<svg class="route-line" viewBox="0 0 720 80" preserveAspectRatio="none" aria-hidden="true"><path d="M136 40 C200 40 270 40 332 40 M388 40 C450 40 520 40 584 40"/></svg>
+<ol><li><span class="route-node ready" aria-hidden="true"></span><span>Recommended<br>free model</span></li><li><span class="route-node waiting" aria-hidden="true"></span><span>Provider<br>hits a limit</span></li><li><span class="route-node next" aria-hidden="true"></span><span>Next available<br>free model</span></li></ol>
+<figcaption>Automatic switching needs another eligible, available model. Cloud provider limits still apply.</figcaption></figure>
+<div class="local-note"><strong>Want no cloud request quota? Go local.</strong><p>Run downloaded models on your own computer. Your hardware sets the pace.</p></div></div>
+<section class="cost-section" aria-labelledby="cost-heading" data-reveal>
+<div class="cost-heading"><h2 id="cost-heading">Build more. <span>Spend less.</span></h2><p class="chapter-lead">No OliveCode subscription. No credit packs.</p><p class="cost-context">Unlimited use of OliveCode, with no usage cap of our own. Cloud provider limits still apply.</p></div>
+<figure class="comparison" aria-labelledby="cost-heading" aria-describedby="chart-note">
+<div class="comparison-rows">
+<div class="comparison-row olive-row"><div class="comparison-label"><span class="brand-icon olive-icon"><img src="./assets/olive-dark.svg" width="40" height="34" alt=""></span><div><strong>OliveCode</strong><small>Free · cloud &amp; local</small></div></div><div class="comparison-data" style="--amount:0%"><span class="price-bar" aria-hidden="true"></span><strong class="year-price">$0 <small>/ year</small></strong></div></div>
+<div class="comparison-row"><div class="comparison-label"><span class="brand-icon"><img src="./assets/githubcopilot.svg" width="30" height="30" alt=""></span><div><strong>GitHub Copilot</strong><small>Pro · $10/month</small></div></div><div class="comparison-data" style="--amount:50%"><span class="price-bar" aria-hidden="true"></span><strong class="year-price">$120 <small>/ year</small></strong></div></div>
+<div class="comparison-row"><div class="comparison-label"><span class="brand-icon"><img src="./assets/cursor.svg" width="30" height="30" alt=""></span><div><strong>Cursor</strong><small>Plus · $8/month · Grok models</small></div></div><div class="comparison-data" style="--amount:40%"><span class="price-bar" aria-hidden="true"></span><strong class="year-price">$96 <small>/ year</small></strong></div></div>
+<div class="comparison-row"><div class="comparison-label"><span class="brand-icon claude-icon"><img src="./assets/claude.svg" width="32" height="32" alt=""></span><div><strong>Claude</strong><small>Pro · includes Claude Code · $20/month</small></div></div><div class="comparison-data" style="--amount:100%"><span class="price-bar" aria-hidden="true"></span><strong class="year-price">$240 <small>/ year</small></strong></div></div>
+</div><div class="comparison-axis" aria-hidden="true"><span>$0</span><span>$60</span><span>$120</span><span>$180</span><span>$240</span></div>
+<figcaption id="chart-note"><p class="chart-note">12 months at selected monthly plan prices in USD, before tax—not annual billing discounts. GitHub and Cursor also offer free tiers. Plans differ in models, features and limits; this compares subscription prices, not performance. Cursor Plus includes Grok models; other-model usage is not included.</p><p class="chart-sources">Checked 15 October 2026 · <a href="https://github.com/features/copilot/plans">GitHub pricing</a> · <a href="https://cursor.com/pricing">Cursor pricing</a> · <a href="https://claude.com/pricing">Claude pricing</a></p></figcaption>
+</figure></section></div></section>
+<div class="closing-link shell"><a href="#install">Start with OliveCode ↑</a></div>
+</main>
+<footer class="footer shell"><span translate="no">OliveCode</span><nav aria-label="Footer"><a href="./guide.html">Guide</a><a href="./sponsors.html">Sponsors</a><a href="./privacy.html">Privacy</a><a href="./terms.html">Terms</a><a href="./about.html">Contact</a></nav><span>© <span id="year"></span></span></footer>
+<script type="module" src="./site.js"></script></body></html>

@@ -70,32 +70,8 @@ export function experimentalWebSocketsEnabled(input: { enabled: boolean; channel
 }
 
 // Built-in plugins that are directly imported (not installed from npm)
-function internalPlugins(flags: RuntimeFlags.Info): PluginInstance[] {
-  return [
-    // Temporary rollout: pre-release builds use WebSockets by default; releases require explicit opt-in.
-    (input) =>
-      CodexAuthPlugin(input, {
-        experimentalWebSockets: experimentalWebSocketsEnabled({ enabled: flags.experimentalWebSockets }),
-      }),
-    CopilotAuthPlugin,
-    ModalPlugin,
-    GitlabAuthPlugin,
-    PoeAuthPlugin,
-    CloudflareWorkersAuthPlugin,
-    CloudflareAIGatewayAuthPlugin,
-    AzureAuthPlugin,
-    DigitalOceanAuthPlugin,
-    SnowflakeCortexAuthPlugin,
-    XaiAuthPlugin,
-    SiliconFlowAuthPlugin,
-    OpenRouterAuthPlugin,
-    CerebrasPlugin,
-    CerebrasAuthPlugin,
-    GroqAuthPlugin,
-    MistralAuthPlugin,
-    NvidiaAuthPlugin,
-    Llm7AuthPlugin,
-  ]
+function internalPlugins(_flags: RuntimeFlags.Info): PluginInstance[] {
+  return [OpenRouterAuthPlugin, GroqAuthPlugin, MistralAuthPlugin]
 }
 
 function isServerPlugin(value: unknown): value is PluginInstance {

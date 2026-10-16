@@ -6,23 +6,10 @@ import { staticModels } from "./static-models"
 // Bearer $NVIDIA_API_KEY auth.
 export const NVIDIA_BASE_URL = "https://integrate.api.nvidia.com/v1"
 
-// Static metadata for fallback-catalog concretes, via staticModels():
-// - deepseek-ai/deepseek-v4-pro-0813: absent from the snapshot but
-//   served live; context/output/cost/capabilities/family pinned from
-//   upstream models.dev (same trust tier as snapshot values).
-// - moonshotai/kimi-k2.6: snapshot-present but flagged deprecated (pruned
-//   at runtime); context/output/capabilities from the snapshot, status
-//   overridden to active because the live endpoint serves it today.
+// Kimi remains live-listed (2026-09-19) despite its deprecated snapshot
+// status. DeepSeek V4 Pro 0813 disappeared from NVIDIA's live catalog;
+// do not force it back into the selectable model list with static metadata.
 const MODELS = [
-  {
-    id: "deepseek-ai/deepseek-v4-pro-0813",
-    name: "DeepSeek V4 Pro 0813",
-    family: "deepseek-thinking",
-    context: 1000000,
-    output: 384000,
-    toolcall: true,
-    reasoning: true,
-  },
   {
     id: "moonshotai/kimi-k2.6",
     name: "Kimi K2.6",

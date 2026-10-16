@@ -1,0 +1,130 @@
+{
+  "$schema": "https://opencode.ai/theme.json",
+  "theme": {
+    "primary": {
+      "dark": "#5DE4B0",
+      "light": "#08764E"
+    },
+    "secondary": {
+      "dark": "#A9BECE",
+      "light": "#465D72"
+    },
+    "accent": {
+      "dark": "#5DE4B0",
+      "light": "#08764E"
+    },
+    "error": {
+      "dark": "#FF9EAD",
+      "light": "#B33149"
+    },
+    "warning": {
+      "dark": "#E6C58C",
+      "light": "#805A10"
+    },
+    "success": {
+      "dark": "#5DE4B0",
+      "light": "#08764E"
+    },
+    "info": {
+      "dark": "#83C8F2",
+      "light": "#246792"
+    },
+    "text": {
+      "dark": "#F0F4F8",
+      "light": "#19232D"
+    },
+    "textMuted": {
+      "dark": "#A5B3C2",
+      "light": "#536373"
+    },
+    "background": {
+      "dark": "#121519",
+      "light": "#F4F6F8"
+    },
+    "backgroundPanel": {
+      "dark": "#1A2026",
+      "light": "#FFFFFF"
+    },
+    "backgroundElement": {
+      "dark": "#232C34",
+      "light": "#E7EDF0"
+    },
+    "border": {
+      "dark": "#657687",
+      "light": "#778896"
+    },
+    "borderActive": {
+      "dark": "#5DE4B0",
+      "light": "#08764E"
+    },
+    "borderSubtle": {
+      "dark": "#35424E",
+      "light": "#CBD5DD"
+    },
+    "diffAdded": {
+      "dark": "#81E6BA",
+      "light": "#08764E"
+    },
+    "diffRemoved": {
+      "dark": "#FFADB8",
+      "light": "#B33149"
+    },
+    "diffAddedBg": {
+      "dark": "#18382E",
+      "light": "#DDEFE5"
+    },
+    "diffRemovedBg": {
+      "dark": "#3C262F",
+      "light": "#F7E2E6"
+    },
+    "diffHighlightAdded": {
+      "dark": "#A0F0CC",
+      "light": "#08764E"
+    },
+    "diffHighlightRemoved": {
+      "dark": "#FFADB8",
+      "light": "#B33149"
+    },
+    "syntaxKeyword": {
+      "dark": "#CBB8F8",
+      "light": "#7451A1"
+    },
+    "syntaxFunction": {
+      "dark": "#81E6BA",
+      "light": "#08764E"
+    },
+    "syntaxType": {
+      "dark": "#83C8F2",
+      "light": "#246792"
+    },
+    "selectedListItemText": "background",
+    "backgroundMenu": "backgroundElement",
+    "diffContext": "textMuted",
+    "diffHunkHeader": "info",
+    "diffContextBg": "backgroundPanel",
+    "diffLineNumber": "textMuted",
+    "diffAddedLineNumberBg": "diffAddedBg",
+    "diffRemovedLineNumberBg": "diffRemovedBg",
+    "markdownText": "text",
+    "markdownHeading": "primary",
+    "markdownLink": "info",
+    "markdownLinkText": "info",
+    "markdownCode": "primary",
+    "markdownBlockQuote": "secondary",
+    "markdownEmph": "secondary",
+    "markdownStrong": "text",
+    "markdownHorizontalRule": "border",
+    "markdownListItem": "primary",
+    "markdownListEnumeration": "secondary",
+    "markdownImage": "primary",
+    "markdownImageText": "info",
+    "markdownCodeBlock": "text",
+    "syntaxComment": "textMuted",
+    "syntaxVariable": "text",
+    "syntaxString": "primary",
+    "syntaxNumber": "secondary",
+    "syntaxOperator": "info",
+    "syntaxPunctuation": "text",
+    "thinkingOpacity": 0.8
+  }
+}

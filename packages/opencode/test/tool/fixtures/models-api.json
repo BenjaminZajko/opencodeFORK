@@ -123874,6 +123874,37 @@
     "name": "OpenRouter",
     "doc": "https://openrouter.ai/models",
     "models": {
+      "poolside/laguna-s-2.1:free": {
+        "id": "poolside/laguna-s-2.1:free",
+        "name": "Laguna S 2.1 (free)",
+        "description": "Laguna S 2.1 is the latest coding agent model from [Poolside](<https://poolside.ai/>). Laguna S 2.1 is a 118B total parameter model with 8B active parameters, scoring 70.2% on Terminal-Bench 2.1 and...",
+        "family": "laguna",
+        "attachment": false,
+        "reasoning": true,
+        "reasoning_options": [],
+        "tool_call": true,
+        "structured_output": false,
+        "temperature": true,
+        "release_date": "2026-07-21",
+        "last_updated": "2026-10-16",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 262144,
+          "output": 32768
+        },
+        "cost": {
+          "input": 0,
+          "output": 0
+        }
+      },
       "inclusionai/ling-2.6-1t": {
         "id": "inclusionai/ling-2.6-1t",
         "name": "Ling-2.6-1T",

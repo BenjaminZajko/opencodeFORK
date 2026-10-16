@@ -1,3 +1,6 @@
+import { DesktopTool } from "./desktop"
+import { BrowserTool } from "./browser"
+import { Computer } from "@/computer/service"
 import { LayerNode } from "@opencode-ai/core/effect/layer-node"
 import { httpClient } from "@opencode-ai/core/effect/app-node-platform"
 import { Ripgrep } from "@opencode-ai/core/ripgrep"
@@ -98,6 +101,8 @@ const layer = Layer.effect(
     const flags = yield* RuntimeFlags.Service
     const mcp = yield* MCP.Service
 
+    const desktop = yield* DesktopTool
+    const browser = yield* BrowserTool
     const invalid = yield* InvalidTool
     const task = yield* TaskTool
     const read = yield* ReadTool
@@ -207,6 +212,8 @@ const layer = Layer.effect(
         const questionEnabled = ["app", "cli", "desktop"].includes(flags.client) || flags.enableQuestionTool
 
         const tool = yield* Effect.all({
+          desktop: Tool.init(desktop),
+          browser: Tool.init(browser),
           invalid: Tool.init(invalid),
           shell: Tool.init(shell),
           read: Tool.init(read),
@@ -229,6 +236,8 @@ const layer = Layer.effect(
         return {
           custom,
           builtin: [
+            tool.desktop,
+            tool.browser,
             tool.invalid,
             ...(questionEnabled ? [tool.question] : []),
             tool.shell,
@@ -290,6 +299,10 @@ const layer = Layer.effect(
 
     const tools: Interface["tools"] = Effect.fn("ToolRegistry.tools")(function* (input) {
       const filtered = (yield* all()).filter((tool) => {
+        if (input.agent.name === "desktop") return ["desktop", "question", "todowrite", "invalid"].includes(tool.id)
+        if (input.agent.name === "computer_background") return ["browser", "question", "todowrite", "invalid"].includes(tool.id)
+        if (["computer", "computer_background_mac"].includes(input.agent.name)) return ["browser", ...(process.platform === "darwin" ? ["desktop"] : []), "question", "todowrite", "invalid"].includes(tool.id)
+        if (["browser", "desktop"].includes(tool.id)) return false
         if (tool.id === WebSearchTool.id) {
           return webSearchEnabled(input.providerID, { exa: flags.enableExa, parallel: flags.enableParallel })
         }
@@ -428,6 +441,7 @@ export const node = LayerNode.make({
   service: Service,
   layer,
   deps: [
+    Computer.node,
     Config.node,
     Plugin.node,
     Question.node,

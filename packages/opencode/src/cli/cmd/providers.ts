@@ -1,3 +1,4 @@
+import { freeProvider } from "@opencode-ai/core/olivecode/models"
 import type { Argv } from "yargs"
 import { Auth } from "../../auth"
 import { cmd } from "./cmd"
@@ -304,7 +305,7 @@ export const ProvidersLoginCommand = effectCmd({
   builder: (yargs: Argv) =>
     yargs
       .positional("url", {
-        describe: "opencode auth provider",
+        describe: "OliveCode auth provider",
         type: "string",
       })
       .option("provider", {
@@ -410,6 +411,7 @@ export const ProvidersLoginCommand = effectCmd({
 
     let provider: string
     if (args.provider) {
+      if (!freeProvider(args.provider)) return yield* fail("OliveCode supports OpenRouter free variants, Groq Free, and Mistral Free mode.")
       const input = args.provider
       const byID = options.find((x) => x.value === input)
       const byName = options.find((x) => x.label.toLowerCase() === input.toLowerCase())
@@ -423,7 +425,7 @@ export const ProvidersLoginCommand = effectCmd({
         yield* Prompt.autocomplete({
           message: "Select provider",
           maxItems: 8,
-          options: [...options, { value: "other", label: "Other" }],
+          options: options.filter((item) => freeProvider(item.value)),
         }),
       )
     }

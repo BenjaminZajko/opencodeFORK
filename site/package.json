@@ -1,0 +1,11 @@
+{
+  "name": "olivecode-site",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "three": "0.186.1"
+  },
+  "devDependencies": {
+    "wrangler": "4.151.0"
+  }
+}

@@ -30,6 +30,10 @@ const LogLevelRef = Schema.Literals(["DEBUG", "INFO", "WARN", "ERROR"]).annotate
 })
 
 export const Info = Schema.Struct({
+  collaboration: Schema.optional(Schema.Struct({
+    teamwork: Schema.optional(Schema.Boolean).annotate({ description: "Use other available free models for planning and review. Defaults to true." }),
+    followThrough: Schema.optional(Schema.Boolean).annotate({ description: "Review task completion and continue concrete unfinished work. Defaults to true." }),
+  })),
   $schema: Schema.optional(Schema.String).annotate({
     description: "JSON schema reference for configuration validation",
   }),

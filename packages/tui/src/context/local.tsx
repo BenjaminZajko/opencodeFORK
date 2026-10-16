@@ -1,4 +1,5 @@
-import { createStore } from "solid-js/store"
+import { freeModel, modelPriority } from "@opencode-ai/core/olivecode/models"
+import { createStore, unwrap } from "solid-js/store"
 import { createSimpleContext } from "./helper"
 import { batch, createEffect, createMemo } from "solid-js"
 import { useSync } from "./sync"
@@ -32,6 +33,12 @@ export function parseModel(model: string) {
   }
 }
 
+export function modelKind(providerID: string): "local" | "cloud" {
+  // The ollama provider serves models on this machine; every other
+  // provider is remote. Same convention as the onboarding flow's check.
+  return providerID === "ollama" ? "local" : "cloud"
+}
+
 export function recentModels(
   model: { providerID: string; modelID: string },
   recent: { providerID: string; modelID: string }[],
@@ -63,7 +70,8 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
 
     function isModelValid(model: { providerID: string; modelID: string }) {
       const provider = sync.data.provider.find((item) => item.id === model.providerID)
-      return !!provider?.models[model.modelID]
+      const info = provider?.models[model.modelID]
+      return !!info && freeModel(model.providerID, model.modelID, info)
     }
 
     function getFirstValidModel(...modelFns: (() => { providerID: string; modelID: string } | undefined)[]) {
@@ -165,6 +173,7 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
       const state = {
         pending: false,
       }
+      let write = Promise.resolve()
 
       function save() {
         if (!modelStore.ready) {
@@ -172,11 +181,19 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
           return
         }
         state.pending = false
-        void writeJsonAtomic(filePath, {
-          recent: modelStore.recent,
-          favorite: modelStore.favorite,
-          variant: modelStore.variant,
+        const snapshot = structuredClone({
+          recent: unwrap(modelStore.recent),
+          favorite: unwrap(modelStore.favorite),
+          variant: unwrap(modelStore.variant),
         })
+        write = write
+          .then(() => writeJsonAtomic(filePath, snapshot))
+          .catch(() => {
+            toast.show({
+              variant: "warning",
+              message: "Could not save model preferences. Check that your state folder is writable.",
+            })
+          })
       }
 
       readJson<unknown>(filePath)
@@ -221,16 +238,11 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
           }
         }
 
-        const provider = sync.data.provider[0]
-        if (!provider) return undefined
-        const defaultModel = sync.data.provider_default[provider.id]
-        const firstModel = Object.values(provider.models)[0]
-        const model = defaultModel ?? firstModel?.id
-        if (!model) return undefined
-        return {
-          providerID: provider.id,
-          modelID: model,
-        }
+        const candidates = sync.data.provider.flatMap((provider) =>
+          Object.keys(provider.models).map((modelID) => ({ providerID: provider.id, modelID })),
+        ).filter(isModelValid)
+        return candidates.sort((a, b) => modelPriority(a.providerID, a.modelID) - modelPriority(b.providerID, b.modelID))[0]
+
       })
 
       const currentModel = createMemo(() => {
@@ -275,7 +287,7 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
         cycle(direction: 1 | -1) {
           const current = currentModel()
           if (!current) return
-          const recent = modelStore.recent
+          const recent = modelStore.recent.filter(isModelValid)
           const index = recent.findIndex((x) => x.providerID === current.providerID && x.modelID === current.modelID)
           if (index === -1) return
           let next = index + direction
@@ -421,6 +433,7 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
       const state = {
         pending: false,
       }
+      let write = Promise.resolve()
 
       function save() {
         if (!sessionStore.ready) {
@@ -428,9 +441,15 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
           return
         }
         state.pending = false
-        void writeJsonAtomic(filePath, {
-          pinned: sessionStore.pinned,
-        })
+        const snapshot = { pinned: [...sessionStore.pinned] }
+        write = write
+          .then(() => writeJsonAtomic(filePath, snapshot))
+          .catch(() => {
+            toast.show({
+              variant: "warning",
+              message: "Could not save pinned sessions. Check that your state folder is writable.",
+            })
+          })
       }
 
       readJson<unknown>(filePath)

@@ -9,6 +9,7 @@ import path from "path"
 import z from "zod"
 import type { Agent } from "../../src/agent/agent"
 import { Provider } from "@/provider/provider"
+import { ProviderCooldown } from "@/provider/cooldown"
 
 import { Session } from "@/session/session"
 import { LLM } from "../../src/session/llm"
@@ -37,15 +38,15 @@ const summary = Layer.succeed(
 )
 
 const ref = {
-  providerID: ProviderV2.ID.make("test"),
+  providerID: ProviderV2.ID.make("ollama"),
   modelID: ModelV2.ID.make("test-model"),
 }
 
 const cfg = {
   provider: {
-    test: {
+    ollama: {
       name: "Test",
-      id: "test",
+      id: "ollama",
       env: [],
       npm: "@ai-sdk/openai-compatible",
       models: {
@@ -75,10 +76,10 @@ function providerCfg(url: string) {
     ...cfg,
     provider: {
       ...cfg.provider,
-      test: {
-        ...cfg.provider.test,
+      ollama: {
+        ...cfg.provider.ollama,
         options: {
-          ...cfg.provider.test.options,
+          ...cfg.provider.ollama.options,
           baseURL: url,
         },
       },
@@ -197,6 +198,7 @@ const root = LayerNode.group([
   Session.node,
   SessionProjector.node,
   Provider.node,
+  ProviderCooldown.node,
   Database.node,
   EventV2Bridge.node,
   SessionStatus.node,
@@ -1213,7 +1215,10 @@ it.live("session.processor retries same model on 429 with no fallback target", (
         const chat = yield* session.create({})
         const parent = yield* user(chat.id, "fallback")
         const msg = yield* assistant(chat.id, parent.id, path.resolve(dir))
-        const mdl = yield* provider.getModel(ProviderV2.ID.make("openrouter"), ModelV2.ID.make("cohere/north-mini-code:free"))
+        const mdl = yield* provider.getModel(
+          ProviderV2.ID.make("openrouter"),
+          ModelV2.ID.make("cohere/north-mini-code:free"),
+        )
         const handle = yield* processors.create({
           assistantMessage: msg,
           sessionID: chat.id,
@@ -1301,3 +1306,80 @@ it.live("session.processor keeps same model when no fallback mapping exists", ()
     { config: (url) => providerCfg(url) },
   ),
 )
+
+for (const cooling of [false, true]) {
+  it.live(`session.processor ${cooling ? "skips a cooling fallback" : "switches to an available fallback"}`, () =>
+    provideTmpdirServer(
+      ({ dir, llm }) =>
+        Effect.gen(function* () {
+          const { processors, session, provider } = yield* boot()
+
+          const cooldowns = yield* ProviderCooldown.Service
+          if (cooling)
+            yield* cooldowns.markDown({
+              providerID: ProviderV2.ID.make("groq"),
+              modelID: ModelV2.ID.make("openai/gpt-oss-120b"),
+              downUntil: Date.now() + 60_000,
+            })
+          yield* llm.error(429, { error: { message: "rate limit exceeded" } })
+          yield* llm.text("after")
+
+          const chat = yield* session.create({})
+          const parent = yield* user(chat.id, "fallback")
+          const msg = yield* assistant(chat.id, parent.id, path.resolve(dir))
+          const mdl = yield* provider.getModel(
+            ProviderV2.ID.make("openrouter"),
+            ModelV2.ID.make("cohere/north-mini-code:free"),
+          )
+          const handle = yield* processors.create({
+            assistantMessage: msg,
+            sessionID: chat.id,
+            model: mdl,
+          })
+
+          const value = yield* handle.process({
+            user: {
+              id: parent.id,
+              sessionID: chat.id,
+              role: "user",
+              time: parent.time,
+              agent: parent.agent,
+              model: {
+                providerID: ProviderV2.ID.make("openrouter"),
+                modelID: ModelV2.ID.make("cohere/north-mini-code:free"),
+              },
+            } satisfies SessionV1.User,
+            sessionID: chat.id,
+            model: mdl,
+            agent: agent(),
+            system: [],
+            messages: [{ role: "user", content: "fallback" }],
+            tools: {},
+          })
+
+          const parts = yield* MessageV2.parts(msg.id)
+
+          expect(value).toBe("continue")
+          expect(yield* llm.calls).toBe(2)
+          expect(parts.some((part) => part.type === "text" && part.text === "after")).toBe(true)
+          expect(handle.message.error).toBeUndefined()
+          expect(handle.message.providerID).toBe(ProviderV2.ID.make(cooling ? "mistral" : "groq"))
+          expect(handle.message.modelID).toBe(ModelV2.ID.make(cooling ? "codestral-latest" : "openai/gpt-oss-120b"))
+        }),
+      {
+        config: (url) => {
+          const config = fallbackCfg(url)
+          const base = config.provider.openrouter
+          const model = base.models["cohere/north-mini-code:free"]
+          return {
+            provider: {
+              ...config.provider,
+              groq: { ...base, id: "groq", models: { "openai/gpt-oss-120b": { ...model, id: "openai/gpt-oss-120b" } } },
+              mistral: { ...base, id: "mistral", models: { "codestral-latest": { ...model, id: "codestral-latest" } } },
+            },
+          }
+        },
+      },
+    ),
+  )
+}

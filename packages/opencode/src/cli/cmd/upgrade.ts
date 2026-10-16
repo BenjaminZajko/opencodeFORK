@@ -2,11 +2,11 @@ import type { Argv } from "yargs"
 import { UI } from "../ui"
 import * as prompts from "@clack/prompts"
 import { Installation } from "../../installation"
-import { InstallationVersion } from "@opencode-ai/core/installation/version"
+import { InstallationChannel, InstallationVersion } from "@opencode-ai/core/installation/version"
 
 export const UpgradeCommand = {
   command: "upgrade [target]",
-  describe: "upgrade opencode to the latest or a specific version",
+  describe: "update OliveCode",
   builder: (yargs: Argv) => {
     return yargs
       .positional("target", {
@@ -21,6 +21,10 @@ export const UpgradeCommand = {
       })
   },
   handler: async (args: { target?: string; method?: string }) => {
+    if (InstallationChannel.startsWith("olivecode")) {
+      UI.println("To update OliveCode, run its install command again from the OliveCode website or release page.")
+      return
+    }
     UI.empty()
     UI.println(UI.logo("  "))
     UI.empty()

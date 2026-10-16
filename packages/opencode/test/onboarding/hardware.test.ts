@@ -1,6 +1,7 @@
 import { describe, it, expect } from "bun:test"
 import {
   bestDedicatedVramGb,
+  detectCpu,
   detectAmdGpus,
   detectHardware,
   detectNvidiaGpus,
@@ -111,6 +112,26 @@ Name=Intel(R) UHD Graphics 730
     const gpus = await detectWindowsGpusWmi(canned(0, out))
     const intel = gpus.find((g) => g.vendor === "intel")!
     expect(intel.vramGb).toBeUndefined()
+  })
+
+  it("uses CIM when WMIC is unavailable", async () => {
+    const gpus = await detectWindowsGpusWmi(async (cmd) => cmd[0] === "wmic"
+      ? { code: -1, stdout: "", stderr: "missing" }
+      : { code: 0, stdout: '{"Name":"Intel Arc A770","AdapterRAM":4294963200,"DriverVersion":"31.0"}', stderr: "" })
+    expect(gpus).toHaveLength(1)
+    expect(gpus[0].name).toBe("Intel Arc A770")
+  })
+})
+
+describe("windows CPU fallback", () => {
+  it("uses CIM core counts when WMIC is unavailable", async () => {
+    const profile: HardwareProfile = { ...emptyProfile(), osName: "Windows" }
+    await detectCpu(profile, { run: async (cmd) => cmd[0] === "wmic"
+      ? { code: -1, stdout: "", stderr: "missing" }
+      : { code: 0, stdout: '{"Name":"AMD Ryzen","NumberOfCores":8,"NumberOfLogicalProcessors":16}', stderr: "" } })
+    expect(profile.cpuModel).toBe("AMD Ryzen")
+    expect(profile.cpuCoresPhysical).toBe(8)
+    expect(profile.cpuCoresLogical).toBe(16)
   })
 })
 

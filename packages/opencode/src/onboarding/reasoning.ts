@@ -1,8 +1,4 @@
-import {
-  bestDedicatedVramGb,
-  isAppleSilicon,
-  type HardwareProfile,
-} from "./hardware"
+import { bestDedicatedVramGb, isAppleSilicon, type HardwareProfile } from "./hardware"
 
 // Hardware-aware model recommendation. Port of OliveCode
 // advisor/reasoning.py (+ advisor/model_catalog.py data).
@@ -47,6 +43,11 @@ export const VRAM_HEADROOM_GB = 1.5 // CUDA context + activations + runtime
 export interface ModelEntry {
   id: string
   family: string
+  name?: string
+  downloadGb?: number
+  runtimeGb?: number
+  variant?: string
+  appleOnly?: boolean
   kind: "local" | "cloud"
   paramsB?: number // undefined for closed models that don't disclose it
   contextWindow: number
@@ -69,6 +70,7 @@ export interface ModelEntry {
 }
 
 export function estimatedRamGb(model: ModelEntry): number {
+  if (model.runtimeGb !== undefined) return model.runtimeGb
   // MoE weights all load into memory even if only a fraction is active
   // per token: size on paramsB, not activeParamsB.
   if (model.ramQ4Gb !== undefined && (model.defaultQuant ?? DEFAULT_QUANT) === DEFAULT_QUANT) {
@@ -79,391 +81,76 @@ export function estimatedRamGb(model: ModelEntry): number {
   return Math.round(((model.paramsB * bpp) / 8.0) * 100) / 100
 }
 
+// Official Ollama tags and download sizes reviewed 2026-09-28.
+// Scores below are internal preference weights, never benchmark claims.
+// Memory includes weights (decimal GB -> GiB) plus a 2 GiB short-context buffer.
+function localModel(
+  id: string,
+  name: string,
+  paramsB: number,
+  downloadGb: number,
+  codingScore: number,
+  speedScore: number,
+  variant: string,
+  appleOnly = false,
+): ModelEntry {
+  return {
+    id,
+    name,
+    family: id.split(":")[0],
+    kind: "local",
+    paramsB,
+    downloadGb,
+    runtimeGb: Math.round(((downloadGb * 1e9) / 2 ** 30 + 2) * 10) / 10,
+    contextWindow: 32768,
+    codingScore,
+    agenticScore: codingScore,
+    speedScore,
+    variant,
+    appleOnly,
+    needsDedicatedGpu: paramsB >= 20 ? "sometimes" : "no",
+    bestFor: "Coding and tool use. Fit estimates reserve memory for the system and a short conversation.",
+    watchOut: "Longer context and other running apps increase memory use. Update Ollama for newer model families.",
+  }
+}
+
+export const LOCAL_CATALOG_REVIEWED = "2026-09-28"
 export const LOCAL_MODELS: ModelEntry[] = [
-  {
-    id: "qwen2.5-coder:32b",
-    family: "qwen2.5-coder",
-    kind: "local",
-    paramsB: 32.0,
-    contextWindow: 32768,
-    ramQ4Gb: 20.0,
-    minRamGb: 24.0,
-    needsDedicatedGpu: "yes",
-    codingScore: 9.4,
-    agenticScore: 8.8,
-    speedScore: 4.0,
-    bestFor: "Top-tier local coding; rivals GPT-4-class on many tasks.",
-    watchOut: "Needs ~24GB RAM or a 24GB GPU. Not for old laptops.",
-  },
-  {
-    id: "qwen2.5-coder:14b",
-    family: "qwen2.5-coder",
-    kind: "local",
-    paramsB: 14.0,
-    contextWindow: 32768,
-    ramQ4Gb: 10.0,
-    minRamGb: 12.0,
-    needsDedicatedGpu: "sometimes",
-    codingScore: 8.6,
-    agenticScore: 8.2,
-    speedScore: 6.0,
-    bestFor: "Sweet spot for 16GB-RAM Apple Silicon and mid-range GPUs.",
-    watchOut: "Slower than 7B on weak CPUs; ~10GB to download.",
-  },
-  {
-    id: "qwen2.5-coder:7b",
-    family: "qwen2.5-coder",
-    kind: "local",
-    paramsB: 7.0,
-    contextWindow: 32768,
-    ramQ4Gb: 5.0,
-    minRamGb: 8.0,
-    needsDedicatedGpu: "no",
-    codingScore: 7.4,
-    agenticScore: 7.2,
-    speedScore: 8.0,
-    bestFor: "Best general-purpose pick on a typical 16GB laptop.",
-    watchOut: "Lower ceiling on hard architectural tasks vs 14B+.",
-  },
-  {
-    id: "qwen2.5-coder:3b",
-    family: "qwen2.5-coder",
-    kind: "local",
-    paramsB: 3.0,
-    contextWindow: 32768,
-    ramQ4Gb: 2.5,
-    minRamGb: 4.0,
-    needsDedicatedGpu: "no",
-    codingScore: 6.0,
-    agenticScore: 6.4,
-    speedScore: 9.0,
-    bestFor: "Budget coding assistance on 8GB-RAM machines.",
-    watchOut: "Struggles on large multi-file refactors.",
-  },
-  {
-    id: "llama3.3:70b",
-    family: "llama3",
-    kind: "local",
-    paramsB: 70.0,
-    contextWindow: 131072,
-    ramQ4Gb: 42.0,
-    minRamGb: 48.0,
-    needsDedicatedGpu: "yes",
-    codingScore: 8.6,
-    agenticScore: 8.8,
-    speedScore: 2.0,
-    bestFor: "Largest open-weight local model; very strong generalist.",
-    watchOut: "Needs 48GB+ unified memory or a 48GB GPU. Slow on CPU.",
-  },
-  {
-    id: "llama3.1:8b",
-    family: "llama3",
-    kind: "local",
-    paramsB: 8.0,
-    contextWindow: 131072,
-    ramQ4Gb: 5.0,
-    minRamGb: 8.0,
-    needsDedicatedGpu: "no",
-    codingScore: 6.8,
-    agenticScore: 7.4,
-    speedScore: 8.0,
-    bestFor: "Solid general-purpose assistant; long context (128k).",
-    watchOut: "Coding is decent but Qwen2.5-Coder is usually better at it.",
-  },
-  {
-    id: "llama3.2:3b",
-    family: "llama3",
-    kind: "local",
-    paramsB: 3.0,
-    contextWindow: 131072,
-    ramQ4Gb: 2.5,
-    minRamGb: 4.0,
-    needsDedicatedGpu: "no",
-    codingScore: 5.4,
-    agenticScore: 6.0,
-    speedScore: 9.0,
-    bestFor: "Cheapest reasonable local model; great for very low-RAM boxes.",
-    watchOut: "Loses coherence on hard reasoning. Coding is basic.",
-  },
-  {
-    id: "llama3.2:1b",
-    family: "llama3",
-    kind: "local",
-    paramsB: 1.0,
-    contextWindow: 131072,
-    ramQ4Gb: 1.2,
-    minRamGb: 2.0,
-    needsDedicatedGpu: "no",
-    codingScore: 3.8,
-    agenticScore: 4.4,
-    speedScore: 10.0,
-    bestFor: "Ultra-budget; will run on basically anything.",
-    watchOut: "Not really a coding agent. Use only as a last resort.",
-  },
-  {
-    id: "deepseek-coder-v2:16b",
-    family: "deepseek-coder",
-    kind: "local",
-    paramsB: 16.0,
-    contextWindow: 163840,
-    ramQ4Gb: 10.0,
-    minRamGb: 12.0,
-    needsDedicatedGpu: "sometimes",
-    codingScore: 8.4,
-    agenticScore: 7.4,
-    speedScore: 5.5,
-    bestFor: "Strong coding at the 16B size; long context.",
-    watchOut: "Newer DeepSeek models exist; check Ollama for the latest tag.",
-  },
-  {
-    id: "phi3.5:3.8b",
-    family: "phi",
-    kind: "local",
-    paramsB: 3.8,
-    contextWindow: 131072,
-    ramQ4Gb: 2.7,
-    minRamGb: 4.0,
-    needsDedicatedGpu: "no",
-    codingScore: 6.2,
-    agenticScore: 6.6,
-    speedScore: 9.0,
-    bestFor: "Small but surprisingly capable; very long context.",
-    watchOut: "Coding quality below Qwen2.5-Coder at the same size.",
-  },
-  {
-    id: "mistral:7b",
-    family: "mistral",
-    kind: "local",
-    paramsB: 7.0,
-    contextWindow: 32768,
-    ramQ4Gb: 4.5,
-    minRamGb: 8.0,
-    needsDedicatedGpu: "no",
-    codingScore: 6.4,
-    agenticScore: 6.6,
-    speedScore: 8.0,
-    bestFor: "Dependable generalist if you want a non-Llama/non-Qwen pick.",
-    watchOut: "Aging model line. Mistral's newer Small/Large are stronger but heavier.",
-  },
-  {
-    id: "gemma2:9b",
-    family: "gemma",
-    kind: "local",
-    paramsB: 9.0,
-    contextWindow: 8192,
-    ramQ4Gb: 6.0,
-    minRamGb: 8.0,
-    needsDedicatedGpu: "no",
-    codingScore: 6.4,
-    agenticScore: 6.4,
-    speedScore: 7.0,
-    bestFor: "Another solid generalist at the 8GB-RAM class.",
-    watchOut: "Short context (8k) compared to Qwen/Llama peers.",
-  },
-  {
-    id: "codellama:7b",
-    family: "codellama",
-    kind: "local",
-    paramsB: 7.0,
-    contextWindow: 16384,
-    ramQ4Gb: 4.5,
-    minRamGb: 8.0,
-    needsDedicatedGpu: "no",
-    codingScore: 6.0,
-    agenticScore: 5.0,
-    speedScore: 7.5,
-    bestFor: "Classic code-completion model; still works for simple fills.",
-    watchOut: "Pre-dates modern agent-style prompting. Newer Qwen2.5-Coder beats it.",
-  },
-  {
-    id: "qwen3-coder:30b-a3b",
-    family: "qwen3-coder",
-    kind: "local",
-    paramsB: 30.0,
-    activeParamsB: 3.0,
-    contextWindow: 262144,
-    ramQ4Gb: 18.0,
-    minRamGb: 22.0,
-    needsDedicatedGpu: "sometimes",
-    codingScore: 9.6,
-    agenticScore: 9.2,
-    speedScore: 6.0,
-    flagship: true,
-    bestFor:
-      "Flagship-class coding at a single-box memory budget. Best 'no compromises' local pick on a 24GB-class machine.",
-    watchOut: "Needs ~20GB memory (works on 24GB Apple Silicon or a 24GB GPU). Slower than smaller models on weak CPUs.",
-  },
-  {
-    id: "qwen3-coder:480b-a35b",
-    family: "qwen3-coder",
-    kind: "local",
-    paramsB: 480.0,
-    activeParamsB: 35.0,
-    contextWindow: 262144,
-    ramQ4Gb: 290.0,
-    minRamGb: 320.0,
-    needsDedicatedGpu: "yes",
-    codingScore: 9.9,
-    agenticScore: 9.7,
-    speedScore: 2.5,
-    serverClass: true,
-    bestFor: "The strongest open-weight coding model. Server-class only.",
-    watchOut: "Requires a multi-GPU rig or a Mac Studio / Mac Pro with >200GB unified memory. Not viable on a single consumer GPU.",
-  },
-  {
-    id: "deepseek-v4-pro",
-    family: "deepseek",
-    kind: "local",
-    paramsB: 620.0,
-    activeParamsB: 42.0,
-    contextWindow: 200000,
-    ramQ4Gb: 370.0,
-    minRamGb: 400.0,
-    needsDedicatedGpu: "yes",
-    codingScore: 9.7,
-    agenticScore: 9.5,
-    speedScore: 2.0,
-    serverClass: true,
-    bestFor: "State-of-the-art open-weight reasoning, strong on code.",
-    watchOut: "Server-class only. Needs a multi-GPU rig or >250GB unified memory.",
-  },
-  {
-    id: "glm-5.2",
-    family: "glm",
-    kind: "local",
-    paramsB: 520.0,
-    activeParamsB: 32.0,
-    contextWindow: 200000,
-    ramQ4Gb: 310.0,
-    minRamGb: 340.0,
-    needsDedicatedGpu: "yes",
-    codingScore: 9.5,
-    agenticScore: 9.4,
-    speedScore: 2.2,
-    serverClass: true,
-    bestFor: "Strong Chinese-developed open-weight model with great agentic tool use.",
-    watchOut: "Server-class only. Needs a multi-GPU rig or >220GB unified memory.",
-  },
-  {
-    id: "kimi-k2.7-code",
-    family: "kimi",
-    kind: "local",
-    paramsB: 480.0,
-    activeParamsB: 28.0,
-    contextWindow: 256000,
-    ramQ4Gb: 290.0,
-    minRamGb: 320.0,
-    needsDedicatedGpu: "yes",
-    codingScore: 9.6,
-    agenticScore: 9.3,
-    speedScore: 2.3,
-    serverClass: true,
-    bestFor: "Code-specialised flagship; long context, strong agentic tool use.",
-    watchOut: "Server-class only. Needs a multi-GPU rig or >200GB unified memory.",
-  },
-  {
-    id: "gemma3:27b",
-    family: "gemma3",
-    kind: "local",
-    paramsB: 27.0,
-    contextWindow: 131072,
-    ramQ4Gb: 17.0,
-    minRamGb: 20.0,
-    needsDedicatedGpu: "sometimes",
-    codingScore: 8.4,
-    agenticScore: 8.2,
-    speedScore: 5.5,
-    license: "gemma (custom, not Apache/MIT)",
-    bestFor: "Solid mid-tier open model from Google; long context.",
-    watchOut: "License is the Gemma custom license, not Apache/MIT — has redistribution/use restrictions. Needs ~20GB to load.",
-  },
+  localModel("qwen3-coder-next:q4_K_M", "Qwen3-Coder-Next", 80, 52, 9.8, 5, "Q4 · smaller download"),
+  localModel("qwen3-coder-next:q8_0", "Qwen3-Coder-Next", 80, 85, 9.8, 3, "Q8 · higher precision"),
+  localModel("qwen3.8:27b-q4_K_M", "Qwen 3.8 27B", 27, 18, 9.7, 5, "Q4 · smaller download"),
+  localModel("qwen3.8:27b-q8_0", "Qwen 3.8 27B", 27, 30, 9.7, 3, "Q8 · higher precision"),
+  localModel("qwen3.8:27b-mlx", "Qwen 3.8 27B", 27, 18, 9.7, 5, "MLX · Apple Silicon", true),
+  localModel(
+    "devstral-small-2:24b-instruct-2512-q4_K_M",
+    "Devstral Small 2 24B",
+    24,
+    15,
+    9.5,
+    5,
+    "Q4 · coding specialist",
+  ),
+  localModel(
+    "devstral-small-2:24b-instruct-2512-q8_0",
+    "Devstral Small 2 24B",
+    24,
+    26,
+    9.5,
+    3,
+    "Q8 · higher precision",
+  ),
+  localModel("qwen3-coder:30b", "Qwen3-Coder 30B", 30, 19, 9.3, 6, "Q4 · 3.3B active parameters"),
+  localModel("gpt-oss:120b", "GPT-OSS 120B", 120, 65, 9.1, 4, "MXFP4 · workstation"),
+  localModel("qwen3.5:9b-q4_K_M", "Qwen 3.5 9B", 9, 6.6, 8.5, 7, "Q4 · balanced"),
+  localModel("qwen3.5:9b-q8_0", "Qwen 3.5 9B", 9, 11, 8.5, 5, "Q8 · higher precision"),
+  localModel("gpt-oss:20b", "GPT-OSS 20B", 20, 14, 8.3, 7, "MXFP4 · reasoning"),
+  localModel("qwen3.5:4b-q4_K_M", "Qwen 3.5 4B", 4, 3.4, 7.5, 9, "Q4 · lightweight"),
+  localModel("qwen3.5:4b-q8_0", "Qwen 3.5 4B", 4, 5.3, 7.5, 7, "Q8 · higher precision"),
+  localModel("qwen3.5:2b-q4_K_M", "Qwen 3.5 2B", 2, 1.9, 6.5, 10, "Q4 · basic tasks"),
 ]
 
-export const CLOUD_MODELS: ModelEntry[] = [
-  {
-    id: "claude-haiku-4-5-20251001",
-    family: "claude",
-    kind: "cloud",
-    contextWindow: 200000,
-    codingScore: 8.0,
-    agenticScore: 8.4,
-    speedScore: 9.0,
-    freeTier: true,
-    signupRequired: true,
-    bestFor: "Strong coding + tool use, fast, very long context.",
-    watchOut: "Free tier has rate limits; not always available in every region.",
-    notes: "Anthropic Claude Haiku 4.5. The realistic free-tier pick in the Claude family.",
-  },
-  {
-    id: "claude-sonnet-5",
-    family: "claude",
-    kind: "cloud",
-    contextWindow: 200000,
-    codingScore: 9.4,
-    agenticScore: 9.5,
-    speedScore: 8.0,
-    freeTier: false,
-    signupRequired: true,
-    bestFor: "Top-tier coding and agentic use; the model OpenCode is tuned against.",
-    watchOut: "Not on the free tier. Listed so the recommender can mention it as a paid upgrade path.",
-    notes: "Anthropic Claude Sonnet 5. Stronger than Haiku but paid.",
-  },
-  {
-    id: "claude-opus-4-8",
-    family: "claude",
-    kind: "cloud",
-    contextWindow: 200000,
-    codingScore: 9.7,
-    agenticScore: 9.6,
-    speedScore: 5.5,
-    freeTier: false,
-    signupRequired: true,
-    bestFor: "The strongest Claude model; for the hardest reasoning and long-horizon agentic work.",
-    watchOut: "Paid, and slow vs Sonnet/Haiku. Overkill for most coding tasks; pick Sonnet 5 for daily use.",
-    notes: "Anthropic Claude Opus 4.8. Top of the Claude lineup as of 2026.",
-  },
-  {
-    id: "gemini-2.0-flash",
-    family: "gemini",
-    kind: "cloud",
-    contextWindow: 1000000,
-    codingScore: 7.6,
-    agenticScore: 7.8,
-    speedScore: 9.0,
-    freeTier: true,
-    signupRequired: true,
-    bestFor: "Huge context window; good for very large codebases.",
-    watchOut: "Free-tier rate limits are strict; tool-use quality trails Claude.",
-    notes: "Google AI Studio free tier.",
-  },
-  {
-    id: "mistral-large-latest",
-    family: "mistral",
-    kind: "cloud",
-    contextWindow: 128000,
-    codingScore: 7.4,
-    agenticScore: 7.4,
-    speedScore: 7.5,
-    freeTier: true,
-    signupRequired: true,
-    bestFor: "Decent generalist with a free tier via le Chat / La Plateforme.",
-    watchOut: "Free tier exists but is rate-limited; coding a notch below Claude/Gemini.",
-  },
-  {
-    id: "openrouter-free-mix",
-    family: "openrouter",
-    kind: "cloud",
-    contextWindow: 32000,
-    codingScore: 6.0,
-    agenticScore: 6.0,
-    speedScore: 7.0,
-    freeTier: true,
-    signupRequired: true,
-    bestFor: "A grab-bag of free models behind one API key (Llama, Qwen, Mistral variants).",
-    watchOut: "Quality varies; the exact free model rotates.",
-    notes: "OpenRouter exposes a rotating set of free models. Use only as a fallback.",
-  },
-]
+// Cloud selection uses the verified provider catalog, never this local advisor.
+export const CLOUD_MODELS: ModelEntry[] = []
 
 export interface ModelCatalog {
   local: ModelEntry[]
@@ -506,6 +193,11 @@ export function entryFromJson(d: Record<string, unknown>): ModelEntry {
   return {
     id: get("id", ""),
     family: get("family", ""),
+    name: get("name", undefined),
+    downloadGb: get("downloadGb", undefined),
+    runtimeGb: get("runtimeGb", undefined),
+    variant: get("variant", undefined),
+    appleOnly: get("appleOnly", false),
     kind: get("kind", "local"),
     paramsB: get("paramsB", undefined),
     contextWindow: get("contextWindow", 0),
@@ -528,19 +220,18 @@ export function entryFromJson(d: Record<string, unknown>): ModelEntry {
   }
 }
 
-export function catalogToJson(catalog: ModelCatalog): { local: Record<string, unknown>[]; cloud: Record<string, unknown>[] } {
+export function catalogToJson(catalog: ModelCatalog): {
+  local: Record<string, unknown>[]
+  cloud: Record<string, unknown>[]
+} {
   return { local: catalog.local.map(entryToJson), cloud: catalog.cloud.map(entryToJson) }
 }
 
 export function catalogFromJson(d: { local?: unknown; cloud?: unknown }): ModelCatalog {
   // Malformed sides fall back to the hardcoded baseline so a bad cache
   // degrades safely.
-  const local = Array.isArray(d.local)
-    ? (d.local as Record<string, unknown>[]).map(entryFromJson)
-    : undefined
-  const cloud = Array.isArray(d.cloud)
-    ? (d.cloud as Record<string, unknown>[]).map(entryFromJson)
-    : undefined
+  const local = Array.isArray(d.local) ? (d.local as Record<string, unknown>[]).map(entryFromJson) : undefined
+  const cloud = Array.isArray(d.cloud) ? (d.cloud as Record<string, unknown>[]).map(entryFromJson) : undefined
   return createCatalog(local, cloud)
 }
 
@@ -568,9 +259,9 @@ export function effectiveMemoryGb(profile: HardwareProfile): number {
   const absoluteHeadroom = RAM_HEADROOM_GB[osKey] ?? RAM_HEADROOM_GB["unknown"]
 
   if (isAppleSilicon(profile)) {
-    const headroom = Math.max(2.0, Math.min(absoluteHeadroom, ram * 0.5))
+    const headroom = Math.max(absoluteHeadroom, ram * 0.25)
     const pool = Math.max(0.0, ram - headroom)
-    return pool > 0 ? pool : -1.0
+    return pool
   }
   if (vram > 0 && ram > 0) {
     const vramUsable = Math.max(0.0, vram - VRAM_HEADROOM_GB)
@@ -581,12 +272,13 @@ export function effectiveMemoryGb(profile: HardwareProfile): number {
   if (ram > 0) {
     const headroom = Math.max(2.0, Math.min(absoluteHeadroom, ram * 0.5))
     const pool = Math.max(0.0, ram - headroom)
-    return pool > 0 ? pool : -1.0
+    return pool
   }
   return -1.0
 }
 
 export function modelMemoryNeedGb(model: ModelEntry): number {
+  if (model.runtimeGb !== undefined) return model.runtimeGb
   if (model.kind === "cloud") return 0.0
   if (model.ramQ4Gb !== undefined && (model.defaultQuant ?? DEFAULT_QUANT) === DEFAULT_QUANT) return model.ramQ4Gb
   if (model.paramsB === undefined) return 0.0
@@ -607,8 +299,10 @@ export function classifyFit(profile: HardwareProfile, model: ModelEntry, poolGb:
 }
 
 export function viable(profile: HardwareProfile, model: ModelEntry, poolGb: number): boolean {
+  if (poolGb === 0) return false
+  if (model.appleOnly && !isAppleSilicon(profile)) return false
   // Server-class models need a >=150 GB pool regardless of fit.
-  if (model.serverClass) return poolGb >= 150.0
+  if (model.serverClass && poolGb < 150.0) return false
   // Unknown host: only trust models needing <= 4 GB.
   if (poolGb < 0) return modelMemoryNeedGb(model) <= 4.0
   return ["comfortable", "tight", "squeezed"].includes(classifyFit(profile, model, poolGb))
@@ -623,18 +317,21 @@ export function scoreLocal(profile: HardwareProfile, model: ModelEntry, poolGb: 
   if (fit === "comfortable") {
     fitScore = 10.0
     reasons.push(
-      `It will run comfortably on your machine (~${need.toFixed(0)} GB needed vs. ~${poolGb.toFixed(0)} GB available).`,
+      `It is estimated to fit comfortably on your machine (~${need.toFixed(0)} GB needed vs. ~${poolGb.toFixed(0)} GB available).`,
     )
   } else if (fit === "tight") {
     fitScore = 7.0
     reasons.push(
-      `It will fit on your machine but uses most of the available memory (~${need.toFixed(0)} GB needed vs. ~${poolGb.toFixed(0)} GB available); close other apps for best speed.`,
+      `It is estimated to fit on your machine but uses most of the available memory (~${need.toFixed(0)} GB needed vs. ~${poolGb.toFixed(0)} GB available); close other apps for best speed.`,
     )
   } else if (fit === "squeezed") {
     fitScore = 4.5
     reasons.push(
-      `It will technically run but will use nearly all of your memory (~${need.toFixed(0)} GB needed vs. ~${poolGb.toFixed(0)} GB available); expect slowdowns.`,
+      `It may run, but will use nearly all of your memory (~${need.toFixed(0)} GB needed vs. ~${poolGb.toFixed(0)} GB available); expect slowdowns.`,
     )
+  } else if (fit === "too-big") {
+    fitScore = 0
+    reasons.push("Exceeds this computer’s estimated model memory budget.")
   } else {
     fitScore = 3.0
     reasons.push("Memory situation is unclear; this is a conservative pick.")
@@ -727,7 +424,11 @@ export function scoreCloud(profile: HardwareProfile, model: ModelEntry): RankedM
   const freeBonus = model.freeTier ? 1.5 : 0.0
   return {
     model,
-    score: 2.5 * (model.codingScore ?? 5.0) + 2.0 * (model.agenticScore ?? 5.0) + 1.0 * (model.speedScore ?? 5.0) + freeBonus,
+    score:
+      2.5 * (model.codingScore ?? 5.0) +
+      2.0 * (model.agenticScore ?? 5.0) +
+      1.0 * (model.speedScore ?? 5.0) +
+      freeBonus,
     fit: "cloud",
     reasons,
   }
@@ -746,17 +447,17 @@ export function recommend(profile: HardwareProfile, catalog?: ModelCatalog): Rec
   const freeCloud = cloudRanked.filter((r) => r.model.freeTier)
 
   const primaryLocal = localRanked.length > 0 ? localRanked[0] : undefined
-  const primaryCloud = (freeCloud.length > 0 ? freeCloud[0] : cloudRanked.length > 0 ? cloudRanked[0] : undefined)
+  const primaryCloud = freeCloud.length > 0 ? freeCloud[0] : cloudRanked.length > 0 ? cloudRanked[0] : undefined
 
   let resolvedLocal = primaryLocal
-  if (!resolvedLocal && cat.local.length > 0) {
+  if (!resolvedLocal && poolGb < 0 && cat.local.length > 0) {
     const fallback = cat.local.reduce((a, b) => (modelMemoryNeedGb(a) <= modelMemoryNeedGb(b) ? a : b))
     resolvedLocal = {
       model: fallback,
       score: 0.0,
       fit: "fallback",
       reasons: [
-        "We couldn't confidently size your hardware, so this is the smallest model in the catalog — it should run on essentially any machine.",
+        "We couldn't confidently size your hardware, so this is the smallest model in the catalog — its suitability is unverified until hardware detection succeeds.",
       ],
     }
     if (!localRanked.some((r) => r.model.id === fallback.id)) localRanked.push(resolvedLocal)
@@ -775,7 +476,11 @@ export function recommend(profile: HardwareProfile, catalog?: ModelCatalog): Rec
   // Cloud-first tiebreak: lead with cloud unless local scoring strictly
   // wins on a comfortable fit.
   let primary: "local" | "cloud" | null = null
-  if (resolvedLocal && resolvedLocal.fit === "comfortable" && (!primaryCloud || resolvedLocal.score > primaryCloud.score)) {
+  if (
+    resolvedLocal &&
+    resolvedLocal.fit === "comfortable" &&
+    (!primaryCloud || resolvedLocal.score > primaryCloud.score)
+  ) {
     primary = "local"
   } else if (primaryCloud) {
     primary = "cloud"
@@ -822,8 +527,8 @@ function profileSummary(profile: HardwareProfile, poolGb: number): string {
 function fitClause(fit: RankedModel["fit"]): string {
   if (fit === "comfortable") return "fits here with room to spare"
   if (fit === "tight") return "fits, but will leave little headroom while it runs"
-  if (fit === "squeezed") return "will run, though it uses just about all of the available memory"
-  return "should run on almost any machine"
+  if (fit === "squeezed") return "may run, though it uses nearly all of the memory budget"
+  return "has unverified hardware suitability"
 }
 
 export function cloudProviderName(model: ModelEntry): string {

@@ -1,4 +1,5 @@
 import { ProviderAuth } from "@/provider/auth"
+import { ProviderCooldown } from "@/provider/cooldown"
 import { Provider } from "@/provider/provider"
 
 import { Schema } from "effect"
@@ -53,6 +54,17 @@ export const ProviderApi = HttpApi.make("provider")
             identifier: "provider.auth",
             summary: "Get provider auth methods",
             description: "Retrieve available authentication methods for all AI providers.",
+          }),
+        ),
+        HttpApiEndpoint.get("cooldowns", `${root}/cooldowns`, {
+          query: WorkspaceRoutingQuery,
+          success: described(Schema.Array(ProviderCooldown.Cooldown), "Active provider cooldowns"),
+        }).annotateMerge(
+          OpenApi.annotations({
+            identifier: "provider.cooldowns",
+            summary: "List active provider cooldowns",
+            description:
+              "List provider+model pairs currently cooling down after a rate limit (429). Expired entries are omitted.",
           }),
         ),
         HttpApiEndpoint.post("authorize", `${root}/:providerID/oauth/authorize`, {

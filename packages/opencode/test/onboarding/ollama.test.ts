@@ -4,6 +4,10 @@ import path from "path"
 import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
 import {
   findOllamaBinary,
+  ollamaStatus,
+  inspectOllamaModel,
+  deleteOllamaModel,
+  ollamaBaseURL,
   listOllamaModels,
   ollamaInstallGuidance,
   parseOllamaList,
@@ -69,6 +73,11 @@ describe("listOllamaModels", () => {
     const file = fakeBin("exit 1")
     expect(await listOllamaModels(file)).toEqual([])
   })
+
+  it("kills a hung binary after the timeout", async () => {
+    const file = fakeBin("sleep 30")
+    expect(await listOllamaModels(file, 50)).toEqual([])
+  })
 })
 
 describe("pullOllamaModel", () => {
@@ -91,5 +100,62 @@ describe("pullOllamaModel", () => {
 describe("ollamaInstallGuidance", () => {
   it("names ollama for this platform", () => {
     expect(ollamaInstallGuidance().toLowerCase()).toContain("ollama")
+  })
+})
+
+describe("Ollama local API", () => {
+  it("distinguishes local downloads from shortcuts and deletes exactly the requested tag", async () => {
+    const original = globalThis.fetch
+    const host = process.env.OLLAMA_HOST
+    process.env.OLLAMA_HOST = "http://127.0.0.1:11434"
+    const deletions: string[] = []
+    globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+      const url = String(input)
+      if (url.endsWith("/tags"))
+        return Response.json({
+          models: [
+            { name: "qwen:8b", size: 5000000000, details: { quantization_level: "Q4_K_M" } },
+            { name: "remote:cloud", size: 340 },
+          ],
+        })
+      if (url.endsWith("/show"))
+        return Response.json({
+          capabilities: ["completion", "tools"],
+          parameters: "num_ctx 8192",
+          model_info: { "qwen.context_length": 32768 },
+        })
+      if (url.endsWith("/delete")) {
+        expect(init?.method).toBe("DELETE")
+        deletions.push(JSON.parse(String(init?.body)).model)
+        return new Response(null)
+      }
+      throw new Error("Unexpected request")
+    }) as typeof fetch
+    try {
+      const status = await ollamaStatus()
+      expect(status.models).toEqual(["qwen:8b"])
+      expect(status.details[1].cloud).toBe(true)
+      expect(await inspectOllamaModel("qwen:8b")).toMatchObject({ context: 8192, tools: true, reasoning: false })
+      await expect(inspectOllamaModel("remote:cloud")).rejects.toThrow("cloud shortcut")
+      await expect(deleteOllamaModel("missing:8b")).rejects.toThrow("no longer installed")
+      await expect(deleteOllamaModel("remote:cloud")).rejects.toThrow("cloud shortcut")
+      expect(deletions).toEqual([])
+      expect(await deleteOllamaModel("qwen:8b")).toBe(true)
+      expect(deletions).toEqual(["qwen:8b"])
+    } finally {
+      globalThis.fetch = original
+      if (host === undefined) delete process.env.OLLAMA_HOST
+      else process.env.OLLAMA_HOST = host
+    }
+  })
+  it("rejects remote Ollama hosts for local operations", () => {
+    const host = process.env.OLLAMA_HOST
+    try {
+      process.env.OLLAMA_HOST = "https://ollama.com"
+      expect(ollamaBaseURL).toThrow("loopback")
+    } finally {
+      if (host === undefined) delete process.env.OLLAMA_HOST
+      else process.env.OLLAMA_HOST = host
+    }
   })
 })

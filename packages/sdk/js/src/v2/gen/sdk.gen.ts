@@ -115,6 +115,10 @@ import type {
   MoveSessionDestination,
   OnboardingDefaultErrors,
   OnboardingDefaultResponses,
+  OnboardingDeleteModelErrors,
+  OnboardingDeleteModelResponses,
+  OnboardingLocalModelErrors,
+  OnboardingLocalModelResponses,
   OnboardingOllamaErrors,
   OnboardingOllamaResponses,
   OnboardingPullErrors,
@@ -153,6 +157,8 @@ import type {
   PromptInput,
   ProviderAuthErrors,
   ProviderAuthResponses,
+  ProviderCooldownsErrors,
+  ProviderCooldownsResponses,
   ProviderListErrors,
   ProviderListResponses,
   ProviderOauthAuthorizeErrors,
@@ -2601,6 +2607,84 @@ export class Onboarding extends HeyApiClient {
   }
 
   /**
+   * Delete one installed Ollama model
+   */
+  public deleteModel<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      workspace?: string
+      model?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+            { in: "body", key: "model" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).delete<
+      OnboardingDeleteModelResponses,
+      OnboardingDeleteModelErrors,
+      ThrowOnError
+    >({
+      url: "/onboarding/local-model",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Inspect a downloaded local model
+   */
+  public localModel<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      workspace?: string
+      model?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+            { in: "body", key: "model" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<
+      OnboardingLocalModelResponses,
+      OnboardingLocalModelErrors,
+      ThrowOnError
+    >({
+      url: "/onboarding/local-model",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
    * Pull an Ollama model
    *
    * Stream `ollama pull` progress as server-sent events.
@@ -3498,6 +3582,36 @@ export class Provider extends HeyApiClient {
     )
     return (options?.client ?? this.client).get<ProviderAuthResponses, ProviderAuthErrors, ThrowOnError>({
       url: "/provider/auth",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * List active provider cooldowns
+   *
+   * List provider+model pairs currently cooling down after a rate limit (429). Expired entries are omitted.
+   */
+  public cooldowns<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      workspace?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<ProviderCooldownsResponses, ProviderCooldownsErrors, ThrowOnError>({
+      url: "/provider/cooldowns",
       ...options,
       ...params,
     })

@@ -9,7 +9,9 @@ describe("NvidiaAuthPlugin", () => {
     worktree: "/tmp",
     directory: "/tmp",
     experimental_workspace: { register: () => {} },
-    get serverUrl() { return new URL("http://localhost:4096") },
+    get serverUrl() {
+      return new URL("http://localhost:4096")
+    },
     $: {} as any,
   }
 
@@ -48,12 +50,12 @@ describe("NvidiaAuthPlugin", () => {
     const plugin = await NvidiaAuthPlugin(mockInput)
     if (!plugin.provider?.models) throw new Error("expected provider models hook")
     const models = await plugin.provider.models({} as any, {} as any)
-    for (const id of ["deepseek-ai/deepseek-v4-pro-0813", "moonshotai/kimi-k2.6"]) {
+    for (const id of ["moonshotai/kimi-k2.6"]) {
       expect(Object.hasOwn(models, id)).toBe(true)
       expect(models[id].status).toBe("active")
       expect(models[id].cost).toMatchObject({ input: 0, output: 0 })
     }
-    expect(models["deepseek-ai/deepseek-v4-pro-0813"].limit).toEqual({ context: 1000000, output: 384000 })
+    expect(models["deepseek-ai/deepseek-v4-pro-0813"]).toBeUndefined()
     expect(models["moonshotai/kimi-k2.6"].limit).toEqual({ context: 262144, output: 262144 })
   })
 })

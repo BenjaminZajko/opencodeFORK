@@ -11,6 +11,8 @@ node_modules
 playground
 tmp
 dist
+distribution/releases/
+site-dist/
 ts-dist
 .turbo
 **/.serena
@@ -32,3 +34,17 @@ UPCOMING_CHANGELOG.md
 logs/
 *.bun-build
 tsconfig.tsbuildinfo
+
+# Local browser previews and sponsor service data
+.playwright-cli/
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+
+# Generated Websupport upload archives
+distribution/websupport/
+.site-build-*/
+
+# Generated Cloudflare upload archives and local platform cache
+distribution/cloudflare/
+.wrangler/

@@ -2,28 +2,22 @@ import { describe, expect, test } from "bun:test"
 import { normalizeCustomProviderID, providerOptions } from "../../../../src/component/dialog-provider"
 
 describe("providerOptions", () => {
-  test("includes a synthetic Other option for custom providers", () => {
-    expect(providerOptions([{ id: "openai", name: "OpenAI" }]).at(-1)).toMatchObject({
-      title: "Other",
-      description: "Custom provider",
-      category: "Providers",
-    })
+  test("excludes paid, trial-only and arbitrary custom providers", () => {
+    expect(providerOptions([
+      { id: "openai", name: "OpenAI" }, { id: "opencode", name: "OpenCode" },
+      { id: "nvidia", name: "NVIDIA" }, { id: "custom", name: "Custom" },
+    ])).toEqual([])
   })
 
-  test("does not use Other as the generic provider category", () => {
-    expect(providerOptions([{ id: "mistral", name: "Mistral" }])[0]?.category).toBe("Providers")
+  test("groups supported connections under Free providers", () => {
+    expect(providerOptions([{ id: "mistral", name: "Mistral" }])[0]?.category).toBe("Free providers")
   })
 
-  test("keeps popular providers first and sorts the rest alphabetically", () => {
-    expect(
-      providerOptions([
-        { id: "openai", name: "OpenAI" },
-        { id: "custom-z", name: "Zebra Provider" },
-        { id: "anthropic", name: "Anthropic" },
-        { id: "mistral", name: "Mistral" },
-        { id: "aws", name: "AWS Bedrock" },
-      ]).map((option) => option.value),
-    ).toEqual(["openai", "anthropic", "aws", "mistral", "custom-z", "__opencode_custom_provider__"])
+  test("orders free connections consistently without an upsell or Other escape hatch", () => {
+    expect(providerOptions([
+      { id: "mistral", name: "Mistral" }, { id: "groq", name: "Groq" },
+      { id: "openrouter", name: "OpenRouter" }, { id: "anthropic", name: "Anthropic" },
+    ]).map((option) => option.value)).toEqual(["openrouter", "groq", "mistral"])
   })
 
   test("does not collide with a configured provider named other", () => {

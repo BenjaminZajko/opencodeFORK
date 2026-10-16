@@ -19,6 +19,10 @@ import { MCP } from "../../src/mcp"
 import { Permission } from "../../src/permission"
 import { Plugin } from "../../src/plugin"
 import { Provider as ProviderSvc } from "@/provider/provider"
+import { FreeModels } from "@/provider/free-models"
+import { Computer } from "@/computer/service"
+import type { ComputerDesktop } from "@/computer/desktop"
+import { freeModel, freeProvider } from "@opencode-ai/core/olivecode/models"
 import { Env } from "../../src/env"
 import { Git } from "../../src/git"
 import { Image } from "../../src/image/image"
@@ -34,6 +38,7 @@ import { SessionCompaction } from "../../src/session/compaction"
 import { SessionSummary } from "../../src/session/summary"
 import { Instruction } from "../../src/session/instruction"
 import { SessionProcessor } from "../../src/session/processor"
+import { Coordination } from "../../src/session/coordination"
 import { SessionPrompt } from "../../src/session/prompt"
 import { SessionRevert } from "../../src/session/revert"
 import { SessionRunState } from "../../src/session/run-state"
@@ -167,6 +172,59 @@ const blockingProcessor = Layer.succeed(
 const runtimeFlags = RuntimeFlags.layer({ experimentalEventSystem: true })
 
 const testLLMServerNode = LayerNode.make({ service: TestLLMServer, layer: TestLLMServer.layer, deps: [] })
+// The local fixture is an intentional test-only provider, not a production
+// exception to OliveCode's free-provider policy.
+const fixtureModels = Layer.succeed(FreeModels.Service, {
+  provider: (id) => id === "test" || id === "ollama" || freeProvider(id),
+  model: (provider, id, model) => provider === "test" && id === "test-model" || freeModel(provider, id, model),
+})
+const desktopActions: ComputerDesktop.Action[] = []
+let coverNextTyping = false
+let unverifiedNextTyping = false
+const desktopFixture = Layer.effect(Computer.Service, Effect.sync(() => {
+  let revision = 0
+  let document = false
+  let windowAvailable = true
+  let covered = false
+  let text = ""
+  return Computer.Service.of({
+    claimAction: () => Effect.void,
+    holdDesktop: () => Effect.succeed(() => {}), stop: () => Effect.void,
+    perform: () => Effect.succeed({ revision: 1, url: "https://example.com", text: "Example Domain", controls: [] }),
+    desktop: (_session, _request, action) => Effect.sync(() => {
+      desktopActions.push(action)
+      if (action.action === "find_app") return { apps: [{ name: "TextEdit", bundle: "com.apple.TextEdit" }] }
+      if (action.action === "status") return { accessibility: true, ready: true, screenRecording: true, platform: "macOS" }
+      if (action.action === "close") return { closed: true }
+      if (["click", "click_text", "type", "fill", "key", "focus", "look"].includes(action.action)) expect(action.revision).toBe(revision)
+      if (action.action === "activate") expect(action.app).toBe("com.apple.TextEdit")
+      if (["type", "fill"].includes(action.action) && coverNextTyping) { coverNextTyping = false; covered = true }
+      if (["type", "fill", "click"].includes(action.action) && covered) throw new Error("Another app covers the requested point. No click was sent. Use desktop action focus to bring the observed window forward.")
+      if (action.action === "focus") covered = false
+      if (action.action === "click_text") { expect(action.target).toBe(11); document = true; windowAvailable = true }
+      if (action.action === "click") {
+        expect(windowAvailable).toBe(true)
+        if (action.target === 8) { windowAvailable = false; document = false }
+        else { expect(action.target).toBe(6); document = true }
+      }
+      if (action.action === "key") {
+        expect(action.key).toBe("n"); expect(action.modifiers).toEqual(["command"])
+        windowAvailable = true; document = true
+      }
+      if (["type", "fill"].includes(action.action)) { expect(document).toBe(true); expect(action.target).toBe(1); text = action.action === "fill" ? action.text! : text + action.text }
+      if (["type", "fill"].includes(action.action) && unverifiedNextTyping) {
+        unverifiedNextTyping = false
+        return { app: "TextEdit", bundle: "com.apple.TextEdit", revision: ++revision, controls: [], inputSent: true, needsObservation: true, observationError: "Foreground app changed after input" }
+      }
+      return { app: "TextEdit", bundle: "com.apple.TextEdit", title: document ? "Untitled" : windowAvailable ? "Open" : "", windowAvailable, revision: ++revision,
+        ...(document ? { focusedTarget: 1, documentModified: text.length > 0 } : {}), text,
+        ...(action.action === "windows" ? { windows: [{ window: 1, title: document ? "Untitled" : "Open", active: true }] } : {}),
+        ...(action.action === "look" ? { screenText: document ? text : "New Document\nCancel", visualTargets: [{ target: 11, text: "New Document", confidence: 0.99, bounds: { x: 20, y: 80, width: 120, height: 30 } }], screenshot: { mime: "image/png", data: "AA==" } } : {}),
+        controls: !windowAvailable ? [] : document ? [{ target: 1, role: "AXTextArea", enabled: true, value: text }] : [{ target: 6, role: "AXButton", enabled: true, name: "New Document" }, { target: 8, role: "AXButton", enabled: true, name: "Cancel" }],
+      }
+    }),
+  })
+}))
 
 const promptRoot = LayerNode.group([
   SessionPrompt.node,
@@ -214,6 +272,7 @@ function makePrompt(input?: { mcpInstructions?: MCP.ServerInstructions[]; proces
     [LSP.node, lsp],
     [MCP.node, makeMcp(input?.mcpInstructions)],
     [RuntimeFlags.node, runtimeFlags],
+    [FreeModels.node, fixtureModels],
   ] as const
   if (input?.processor === "blocking") {
     return LayerNode.compile(promptRoot, [...replacements, [SessionProcessor.node, blockingProcessor]])
@@ -221,17 +280,19 @@ function makePrompt(input?: { mcpInstructions?: MCP.ServerInstructions[]; proces
   return LayerNode.compile(promptRoot, replacements)
 }
 
-function makeHttp(input?: { mcpInstructions?: MCP.ServerInstructions[]; processor?: "blocking" }) {
+function makeHttp(input?: { mcpInstructions?: MCP.ServerInstructions[]; processor?: "blocking"; desktopFixture?: boolean }) {
   const root = LayerNode.group([promptRoot, testLLMServerNode])
   const replacements = [
     [SessionSummary.node, summary],
     [LSP.node, lsp],
     [MCP.node, makeMcp(input?.mcpInstructions)],
     [RuntimeFlags.node, runtimeFlags],
+    [FreeModels.node, fixtureModels],
   ] as const
   if (input?.processor === "blocking") {
     return LayerNode.compile(root, [...replacements, [SessionProcessor.node, blockingProcessor]])
   }
+  if (input?.desktopFixture) return LayerNode.compile(root, [...replacements, [Computer.node, desktopFixture]])
   return LayerNode.compile(root, replacements)
 }
 
@@ -240,6 +301,7 @@ function makeHttpNoLLMServer(input?: { mcpInstructions?: MCP.ServerInstructions[
 }
 
 const it = testEffect(makeHttp())
+const desktopIt = testEffect(makeHttp({ desktopFixture: true }))
 const noLLMServer = testEffect(makeHttpNoLLMServer())
 const raceNoLLMServer = testEffect(makeHttpNoLLMServer({ processor: "blocking" }))
 const withMcpInstructions = testEffect(
@@ -310,7 +372,7 @@ const writeText = Effect.fn("test.writeText")(function* (file: string, text: str
 
 const writeConfig = Effect.fn("test.writeConfig")(function* (dir: string, config: Partial<ConfigV1.Info>) {
   yield* writeText(
-    path.join(dir, "opencode.json"),
+    path.join(dir, "olivecode.json"),
     JSON.stringify({ $schema: "https://opencode.ai/config.json", ...config }),
   )
 })
@@ -878,6 +940,166 @@ it.instance("loop continues when finish is unknown", () =>
   }),
 )
 
+it.instance("reasoning-only stop resumes actual work even with Assist disabled", () =>
+  Effect.gen(function* () {
+    const { llm } = yield* useServerConfig((url) => ({ ...providerCfg(url), collaboration: { teamwork: false, followThrough: false } }))
+    const prompt = yield* SessionPrompt.Service
+    const sessions = yield* Session.Service
+    const session = yield* sessions.create({ title: "Pinned", permission: [{ permission: "*", pattern: "*", action: "allow" }] })
+    yield* prompt.prompt({ sessionID: session.id, agent: "build", noReply: true, parts: [{ type: "text", text: "create a document and verify its text" }] })
+    yield* llm.push(reply().reason("I will now use the tool.").stop())
+    yield* llm.tool("glob", { pattern: "*.txt" })
+    yield* llm.text("Verified the recovered result.")
+    const result = yield* prompt.loop({ sessionID: session.id })
+    expect(yield* llm.calls).toBe(3)
+    expect(result.parts.some((part) => part.type === "text" && part.text === "Verified the recovered result.")).toBe(true)
+    const history = yield* sessions.messages({ sessionID: session.id })
+    const recovered = history.flatMap((message) => message.parts).filter((part) => part.type === "tool" && part.tool === "glob")
+    expect(recovered).toHaveLength(1)
+    expect(recovered[0]?.type === "tool" && recovered[0].state.status).toBe("completed")
+  }),
+)
+
+it.instance("repeated empty stops have bounded recovery and a truthful visible result", () =>
+  Effect.gen(function* () {
+    const { llm } = yield* useServerConfig((url) => ({ ...providerCfg(url), collaboration: { teamwork: false, followThrough: false } }))
+    const prompt = yield* SessionPrompt.Service
+    const sessions = yield* Session.Service
+    const session = yield* sessions.create({ title: "Pinned" })
+    yield* prompt.prompt({ sessionID: session.id, agent: "build", noReply: true, parts: [{ type: "text", text: "hello" }] })
+    for (let i = 0; i < 3; i++) yield* llm.push(reply().reason("Still thinking.").stop())
+    const result = yield* prompt.loop({ sessionID: session.id })
+    expect(yield* llm.calls).toBe(3)
+    expect(result.parts.some((part) => part.type === "text" && part.text.includes("requested result has not been confirmed"))).toBe(true)
+    expect(result.parts.some((part) => part.type === "tool")).toBe(false)
+  }),
+)
+
+it.instance("Stop during empty-response recovery prevents further model calls", () =>
+  Effect.gen(function* () {
+    const { llm } = yield* useServerConfig((url) => ({ ...providerCfg(url), collaboration: { teamwork: false, followThrough: false } }))
+    const prompt = yield* SessionPrompt.Service
+    const sessions = yield* Session.Service
+    const session = yield* sessions.create({ title: "Pinned" })
+    yield* prompt.prompt({ sessionID: session.id, agent: "build", noReply: true, parts: [{ type: "text", text: "hello" }] })
+    yield* llm.push(reply().reason("I will act next.").stop())
+    yield* llm.hang
+    const fiber = yield* prompt.loop({ sessionID: session.id }).pipe(Effect.forkChild)
+    yield* llm.wait(2)
+    yield* waitForBusy(session.id)
+    yield* prompt.cancel(session.id)
+    const exit = yield* Fiber.await(fiber)
+    expect(Exit.isSuccess(exit)).toBe(true)
+    if (Exit.isSuccess(exit) && exit.value.info.role === "assistant") expect(exit.value.info.error?.name).toBe("MessageAbortedError")
+    expect(yield* llm.calls).toBe(2)
+  }),
+)
+
+const toolValidationError = { message: "Tool call validation failed: tool call validation failed: attempted to call tool 'type' which was not in request.tools", type: "invalid_request_error" }
+
+// Explicit opt-in only: the real cloud model sees a synthetic window, never a
+// personal document. CI and ordinary test runs make no real provider requests.
+if (process.env.OLIVECODE_LIVE_DESKTOP_TEST_KEY) desktopIt.instance("live Groq GPT OSS completes a simulated TextEdit task", () =>
+  Effect.gen(function* () {
+    desktopActions.length = 0
+    const { directory } = yield* TestInstance
+    yield* writeConfig(directory, {
+      collaboration: { teamwork: false, followThrough: false }, enabled_providers: ["groq"],
+      provider: { groq: { options: { apiKey: process.env.OLIVECODE_LIVE_DESKTOP_TEST_KEY }, models: { "openai/gpt-oss-120b": {
+        name: "GPT OSS 120B", tool_call: true, reasoning: true, limit: { context: 131072, output: 4096 },
+      } } } },
+    })
+    const prompt = yield* SessionPrompt.Service
+    const sessions = yield* Session.Service
+    const session = yield* sessions.create({ title: "Pinned", permission: [{ permission: "desktop", pattern: "*", action: "allow" }] })
+    const result = yield* prompt.prompt({ sessionID: session.id, agent: "desktop",
+      model: { providerID: ProviderV2.ID.make("groq"), modelID: ModelV2.ID.make("openai/gpt-oss-120b") },
+      parts: [{ type: "text", text: "Open TextEdit, create a document, type Hello from OliveCode, verify the text, and leave it unsaved." }] })
+    expect(result.info.role === "assistant" && result.info.error).toBeUndefined()
+    expect(desktopActions.some((action) => action.action === "activate" && action.app === "com.apple.TextEdit")).toBe(true)
+    const typed = desktopActions.filter((action) => ["type", "fill"].includes(action.action))
+    expect(typed).toHaveLength(1)
+    expect(typed[0]?.text).toBe("Hello from OliveCode")
+    expect(result.parts.some((part) => part.type === "text" && part.text.trim())).toBe(true)
+    expect(desktopActions.some((action) => action.action === "key" && action.key === "s")).toBe(false)
+  }), 90_000,
+)
+
+if (process.env.OLIVECODE_LIVE_DESKTOP_TEST_KEY) desktopIt.instance("live Groq GPT OSS handles Cancel and a windowless TextEdit app", () =>
+  Effect.gen(function* () {
+    desktopActions.length = 0
+    const { directory } = yield* TestInstance
+    yield* writeConfig(directory, {
+      collaboration: { teamwork: false, followThrough: false }, enabled_providers: ["groq"],
+      provider: { groq: { options: { apiKey: process.env.OLIVECODE_LIVE_DESKTOP_TEST_KEY }, models: { "openai/gpt-oss-120b": {
+        name: "GPT OSS 120B", tool_call: true, reasoning: true, limit: { context: 131072, output: 4096 },
+      } } } },
+    })
+    const prompt = yield* SessionPrompt.Service
+    const sessions = yield* Session.Service
+    const session = yield* sessions.create({ title: "Pinned", permission: [{ permission: "desktop", pattern: "*", action: "allow" }] })
+    const result = yield* prompt.prompt({ sessionID: session.id, agent: "desktop",
+      model: { providerID: ProviderV2.ID.make("groq"), modelID: ModelV2.ID.make("openai/gpt-oss-120b") },
+      parts: [{ type: "text", text: "Open TextEdit. For this recovery test, dismiss its Open dialog using Cancel, then use Command+N to create a new document. Type exactly Hello from OliveCode, verify the document text, and leave it unsaved. Execute only one desktop action per turn." }] })
+    expect(result.info.role === "assistant" && result.info.error).toBeUndefined()
+    expect(desktopActions.some((action) => action.action === "activate" && action.app === "com.apple.TextEdit")).toBe(true)
+    const typed = desktopActions.filter((action) => ["type", "fill"].includes(action.action))
+    expect(desktopActions.some((action) => action.action === "click" && action.target === 8)).toBe(true)
+    expect(desktopActions.some((action) => action.action === "key" && action.key === "n")).toBe(true)
+    expect(typed).toHaveLength(1)
+    expect(typed[0]?.text).toBe("Hello from OliveCode")
+    expect(result.parts.some((part) => part.type === "text" && part.text.trim())).toBe(true)
+    expect(desktopActions.some((action) => action.action === "key" && action.key === "s")).toBe(false)
+  }), 90_000,
+)
+
+desktopIt.instance("Desktop completes the TextEdit sequence after HTTP and streamed tool-name rejection", () =>
+  Effect.gen(function* () {
+    desktopActions.length = 0
+    const { llm } = yield* useServerConfig((url) => ({ ...providerCfg(url), collaboration: { teamwork: false, followThrough: false } }))
+    const prompt = yield* SessionPrompt.Service
+    const sessions = yield* Session.Service
+    const session = yield* sessions.create({ title: "Pinned", permission: [{ permission: "desktop", pattern: "*", action: "allow" }] })
+    yield* prompt.prompt({ sessionID: session.id, agent: "desktop", model: ref, noReply: true,
+      parts: [{ type: "text", text: "Open TextEdit, create a document, type Hello from OliveCode, verify the text, and leave it unsaved." }] })
+    yield* llm.error(400, { error: toolValidationError })
+    yield* llm.tool("desktop", { action: "status" })
+    yield* llm.tool("desktop", { action: "activate", app: "com.apple.TextEdit" })
+    yield* llm.tool("desktop", { action: "click", target: 6 })
+    yield* llm.push({ type: "sse", head: [{ error: toolValidationError }], tail: [] })
+    yield* llm.tool("desktop", { action: "type", text: "Hello from OliveCode" })
+    yield* llm.tool("desktop", { action: "observe" })
+    yield* llm.text("Verified Hello from OliveCode in the new unsaved document.")
+    const result = yield* prompt.loop({ sessionID: session.id })
+    expect(desktopActions.map((action) => action.action)).toEqual(["status", "activate", "click", "type", "observe"])
+    expect(result.info.role === "assistant" && result.info.error).toBeUndefined()
+    expect(result.parts.some((part) => part.type === "text" && part.text.includes("Verified Hello from OliveCode"))).toBe(true)
+    const history = yield* sessions.messages({ sessionID: session.id })
+    const parts = history.flatMap((message) => message.parts).filter((part) => part.type === "tool")
+    expect(parts.every((part) => part.state.status === "completed" && part.tool === "desktop")).toBe(true)
+    expect(parts).toHaveLength(5)
+    const requests = yield* llm.inputs
+    expect(requests).toHaveLength(8)
+    expect(JSON.stringify(requests[1])).toContain("only available tool names")
+    expect(JSON.stringify(requests[5])).toContain("Never call status, activate, click or type as separate tools")
+  }),
+)
+
+it.instance("repeated tool-name rejections stop after two repairs", () =>
+  Effect.gen(function* () {
+    const { llm } = yield* useServerConfig(providerCfg)
+    const prompt = yield* SessionPrompt.Service
+    const sessions = yield* Session.Service
+    const session = yield* sessions.create({ title: "Pinned" })
+    yield* prompt.prompt({ sessionID: session.id, agent: "build", noReply: true, parts: [{ type: "text", text: "hello" }] })
+    for (let i = 0; i < 3; i++) yield* llm.error(400, { error: toolValidationError })
+    const result = yield* prompt.loop({ sessionID: session.id })
+    expect(yield* llm.calls).toBe(3)
+    expect(result.info.role === "assistant" && !!result.info.error).toBe(true)
+    expect(result.parts.some((part) => part.type === "tool")).toBe(false)
+  }),
+)
+
 it.instance("glob tool keeps instance context during prompt runs", () =>
   Effect.gen(function* () {
     const { dir, llm } = yield* useServerConfig(providerCfg)
@@ -1018,6 +1240,8 @@ it.instance("subtask child inherits parent session external_directory allow", ()
 
 noLLMServer.instance("prompt tools replace previous prompt tool rules", () =>
   Effect.gen(function* () {
+    const { directory } = yield* TestInstance
+    yield* writeConfig(directory, cfg)
     const prompt = yield* SessionPrompt.Service
     const sessions = yield* Session.Service
     const session = yield* sessions.create({ title: "Prompt tools" })
@@ -2468,3 +2692,243 @@ noLLMServer.instance(
     }),
   30_000,
 )
+
+desktopIt.instance("Desktop recovers repetition after Cancel, creates a window, and verifies the unsaved document", () =>
+  Effect.gen(function* () {
+    desktopActions.length = 0
+    const { llm } = yield* useServerConfig((url) => ({ ...providerCfg(url), collaboration: { teamwork: false, followThrough: false } }))
+    const prompt = yield* SessionPrompt.Service
+    const sessions = yield* Session.Service
+    const session = yield* sessions.create({ title: "Pinned", permission: [{ permission: "desktop", pattern: "*", action: "allow" }] })
+    yield* prompt.prompt({ sessionID: session.id, agent: "desktop", model: ref, noReply: true,
+      parts: [{ type: "text", text: "Open TextEdit, create a document, type Hello from OliveCode, verify the text, and leave it unsaved." }] })
+    yield* llm.tool("desktop", { action: "status" })
+    yield* llm.tool("desktop", { action: "activate", app: "com.apple.TextEdit" })
+    yield* llm.tool("desktop", { action: "click", target: 8 })
+    yield* llm.text("Wait for the current desktop action to finish. Let's try again. We need to click the New Document button to create a new document. ".repeat(300))
+    yield* llm.tool("desktop", { action: "observe" })
+    yield* llm.tool("desktop", { action: "key", key: "n", modifiers: ["command"] })
+    yield* llm.tool("desktop", { action: "type", text: "Hello from OliveCode" })
+    yield* llm.tool("desktop", { action: "observe" })
+    yield* llm.text("Verified Hello from OliveCode in the new document. Left it unsaved.")
+    const result = yield* prompt.loop({ sessionID: session.id })
+    expect(result.info.role === "assistant" && result.info.error).toBeUndefined()
+    expect(result.parts.some((part) => part.type === "text" && part.text.includes("Left it unsaved"))).toBe(true)
+    expect(desktopActions.map((action) => action.action)).toEqual(["status", "activate", "click", "observe", "key", "type", "observe"])
+    const history = yield* sessions.messages({ sessionID: session.id })
+    const parts = history.flatMap((message) => message.parts)
+    const interrupted = parts.filter((part) => part.type === "text" && part.metadata?.olivecodeInterruptedRepetition)
+    expect(interrupted).toHaveLength(1)
+    expect(parts.filter((part) => part.type === "text").every((part) => part.text.length < 1500)).toBe(true)
+    const outputs = parts.filter((part) => part.type === "tool" && part.state.status === "completed").map((part) => JSON.parse((part as CompletedToolPart).state.output))
+    expect(outputs.some((output) => output.windowAvailable === false && output.controls.length === 0)).toBe(true)
+    expect(outputs.at(-1)).toMatchObject({ text: "Hello from OliveCode", documentModified: true, windowAvailable: true })
+    expect(desktopActions.filter((action) => action.action === "type")).toHaveLength(1)
+    expect(yield* llm.calls).toBe(9)
+    const hits = yield* llm.hits
+    expect(JSON.stringify(hits[4]?.body)).toContain("repeating yourself")
+  }),
+)
+
+desktopIt.instance("repeated desktop response loops cannot overflow history or trigger endless review", () =>
+  Effect.gen(function* () {
+    const { llm } = yield* useServerConfig((url) => ({ ...providerCfg(url), collaboration: { teamwork: false, followThrough: false } }))
+    const prompt = yield* SessionPrompt.Service
+    const sessions = yield* Session.Service
+    const session = yield* sessions.create({ title: "Pinned" })
+    yield* prompt.prompt({ sessionID: session.id, agent: "desktop", model: ref, noReply: true, parts: [{ type: "text", text: "create a document" }] })
+    for (let i = 0; i < 3; i++) yield* llm.text("Wait for the current desktop action to finish. Let's try again. We need to create a new document. ".repeat(400))
+    const result = yield* prompt.loop({ sessionID: session.id })
+    expect(yield* llm.calls).toBe(3)
+    expect(result.parts.some((part) => part.type === "text" && part.text.includes("requested result has not been confirmed"))).toBe(true)
+    const history = yield* sessions.messages({ sessionID: session.id })
+    expect(history.flatMap((message) => message.parts).filter((part) => part.type === "text").every((part) => part.text.length < 1500)).toBe(true)
+  }),
+)
+
+desktopIt.instance("Desktop asks Groq for sequential tool calls on every generation", () =>
+  Effect.gen(function* () {
+    const { llm } = yield* useServerConfig((url) => ({ collaboration: { teamwork: false, followThrough: false }, enabled_providers: ["groq"],
+      provider: { groq: { options: { apiKey: "test-key", baseURL: url }, models: { "openai/gpt-oss-120b": { tool_call: true } } } },
+    }))
+    const prompt = yield* SessionPrompt.Service
+    const sessions = yield* Session.Service
+    const session = yield* sessions.create({ title: "Pinned", permission: [{ permission: "desktop", pattern: "*", action: "allow" }] })
+    yield* llm.tool("desktop", { action: "status" })
+    yield* llm.text("Desktop access is already enabled.")
+    const result = yield* prompt.prompt({ sessionID: session.id, agent: "desktop",
+      model: { providerID: ProviderV2.ID.make("groq"), modelID: ModelV2.ID.make("openai/gpt-oss-120b") },
+      parts: [{ type: "text", text: "Check desktop permissions." }] })
+    expect(result.info.role === "assistant" && result.info.error).toBeUndefined()
+    const hits = yield* llm.hits
+    expect(hits).toHaveLength(2)
+    for (const hit of hits) expect(hit.body.parallel_tool_calls).toBe(false)
+  }),
+)
+
+desktopIt.instance("Desktop rejects parallel Cancel and Command+N without replaying the click", () =>
+  Effect.gen(function* () {
+    desktopActions.length = 0
+    const { llm } = yield* useServerConfig((url) => ({ ...providerCfg(url), collaboration: { teamwork: false, followThrough: false } }))
+    const prompt = yield* SessionPrompt.Service
+    const sessions = yield* Session.Service
+    const session = yield* sessions.create({ title: "Pinned", permission: [{ permission: "desktop", pattern: "*", action: "allow" }] })
+    yield* prompt.prompt({ sessionID: session.id, agent: "desktop", model: ref, noReply: true, parts: [{ type: "text", text: "Create an unsaved TextEdit document with Hello from OliveCode." }] })
+    yield* llm.tool("desktop", { action: "activate", app: "com.apple.TextEdit" })
+    yield* llm.push({ type: "sse", head: [
+      { id: "chatcmpl-parallel", object: "chat.completion.chunk", choices: [{ index: 0, delta: { role: "assistant", tool_calls: [
+        { index: 0, id: "parallel_cancel", type: "function", function: { name: "desktop", arguments: JSON.stringify({ action: "click", target: 8 }) } },
+        { index: 1, id: "parallel_new", type: "function", function: { name: "desktop", arguments: JSON.stringify({ action: "key", key: "n", modifiers: ["command"] }) } },
+      ] } }] },
+    ], tail: [{ id: "chatcmpl-parallel", object: "chat.completion.chunk", choices: [{ index: 0, delta: {}, finish_reason: "tool_calls" }] }] })
+    yield* llm.tool("desktop", { action: "observe" })
+    yield* llm.tool("desktop", { action: "key", key: "n", modifiers: ["command"] })
+    yield* llm.tool("desktop", { action: "type", text: "Hello from OliveCode" })
+    yield* llm.tool("desktop", { action: "observe" })
+    yield* llm.text("Verified the text. The document is unsaved.")
+    const result = yield* prompt.loop({ sessionID: session.id })
+    expect(result.info.role === "assistant" && result.info.error).toBeUndefined()
+    expect(desktopActions.map((action) => action.action)).toEqual(["activate", "click", "observe", "key", "type", "observe"])
+    const history = yield* sessions.messages({ sessionID: session.id })
+    const rejected = history.flatMap((message) => message.parts).filter((part) => part.type === "tool" && part.state.status === "error") as ErrorToolPart[]
+    expect(rejected).toHaveLength(1)
+    expect(rejected[0]?.state.error).toContain("Only one desktop action")
+    expect(rejected[0]?.state.error).toContain("not executed")
+  }),
+)
+
+desktopIt.instance("Desktop recovers a covered point by focusing once and verifies the text", () =>
+  Effect.gen(function* () {
+    desktopActions.length = 0
+    coverNextTyping = true
+    const { llm } = yield* useServerConfig((url) => ({ ...providerCfg(url), collaboration: { teamwork: false, followThrough: false } }))
+    const prompt = yield* SessionPrompt.Service
+    const sessions = yield* Session.Service
+    const session = yield* sessions.create({ title: "Pinned", permission: [{ permission: "desktop", pattern: "*", action: "allow" }] })
+    yield* prompt.prompt({ sessionID: session.id, agent: "desktop", model: ref, noReply: true, parts: [{ type: "text", text: "Create an unsaved Hello from OliveCode document in TextEdit." }] })
+    yield* llm.tool("desktop", { action: "activate", app: "com.apple.TextEdit" })
+    yield* llm.tool("desktop", { action: "click", target: 6 })
+    yield* llm.tool("desktop", { action: "type", text: "Hello from OliveCode" })
+    yield* llm.tool("desktop", { action: "focus" })
+    yield* llm.tool("desktop", { action: "type", text: "Hello from OliveCode" })
+    yield* llm.text("Verified Hello from OliveCode. The document remains unsaved.")
+    const result = yield* prompt.loop({ sessionID: session.id })
+    expect(result.info.role === "assistant" && result.info.error).toBeUndefined()
+    expect(desktopActions.map((action) => action.action)).toEqual(["activate", "click", "type", "focus", "type"])
+    const history = yield* sessions.messages({ sessionID: session.id })
+    const tools = history.flatMap((message) => message.parts).filter((part) => part.type === "tool") as SessionV1.ToolPart[]
+    expect(tools.filter((part) => part.state.status === "error")).toHaveLength(1)
+    const last = tools.at(-1) as CompletedToolPart
+    expect(JSON.parse(last.state.output)).toMatchObject({ text: "Hello from OliveCode", documentModified: true })
+  }).pipe(Effect.ensuring(Effect.sync(() => { coverNextTyping = false }))),
+)
+
+desktopIt.instance("text-only Desktop uses approved screen text to click a visual label and select an app window", () =>
+  Effect.gen(function* () {
+    desktopActions.length = 0
+    const { llm } = yield* useServerConfig((url) => ({ ...providerCfg(url), collaboration: { teamwork: false, followThrough: false } }))
+    const prompt = yield* SessionPrompt.Service
+    const sessions = yield* Session.Service
+    const session = yield* sessions.create({ title: "Pinned", permission: [{ permission: "desktop", pattern: "*", action: "allow" }, { permission: "desktop_screenshot", pattern: "*", action: "allow" }] })
+    yield* prompt.prompt({ sessionID: session.id, agent: "desktop", model: ref, noReply: true, parts: [{ type: "text", text: "Use screen-text recognition to find New Document, create an unsaved Hello from OliveCode document, and list its app windows." }] })
+    yield* llm.tool("desktop", { action: "activate", app: "com.apple.TextEdit" })
+    yield* llm.tool("desktop", { action: "look" })
+    yield* llm.tool("desktop", { action: "click_text", target: 11 })
+    yield* llm.tool("desktop", { action: "type", text: "Hello from OliveCode" })
+    yield* llm.tool("desktop", { action: "windows" })
+    yield* llm.tool("desktop", { action: "focus", window: 1 })
+    yield* llm.text("Verified the text in the selected unsaved document.")
+    const result = yield* prompt.loop({ sessionID: session.id })
+    expect(result.info.role === "assistant" && result.info.error).toBeUndefined()
+    expect(desktopActions.map((action) => action.action)).toEqual(["activate", "look", "click_text", "type", "windows", "focus"])
+    const history = yield* sessions.messages({ sessionID: session.id })
+    const capture = history.flatMap((message) => message.parts).find((part) => part.type === "tool" && part.state.input.action === "look") as CompletedToolPart
+    expect(JSON.parse(capture.state.output)).toMatchObject({ screenText: "New Document\nCancel", vision: "on-device screen text only; no image sent to model" })
+    expect(capture.state.attachments?.length ?? 0).toBe(0)
+    const hits = yield* llm.hits
+    expect(JSON.stringify(hits.map((hit) => hit.body))).not.toContain("AA==")
+    expect(JSON.stringify(hits[2]?.body)).toContain("visualTargets")
+  }),
+)
+
+if (process.env.OLIVECODE_LIVE_DESKTOP_TEST_KEY) desktopIt.instance("live Groq GPT OSS uses on-device screen text without receiving an image", () =>
+  Effect.gen(function* () {
+    desktopActions.length = 0
+    const { directory } = yield* TestInstance
+    yield* writeConfig(directory, {
+      collaboration: { teamwork: false, followThrough: false }, enabled_providers: ["groq"],
+      provider: { groq: { options: { apiKey: process.env.OLIVECODE_LIVE_DESKTOP_TEST_KEY }, models: { "openai/gpt-oss-120b": {
+        name: "GPT OSS 120B", tool_call: true, reasoning: true, limit: { context: 131072, output: 4096 },
+      } } } },
+    })
+    const prompt = yield* SessionPrompt.Service
+    const sessions = yield* Session.Service
+    const session = yield* sessions.create({ title: "Pinned", permission: [{ permission: "desktop", pattern: "*", action: "allow" }, { permission: "desktop_screenshot", pattern: "*", action: "allow" }] })
+    const result = yield* prompt.prompt({ sessionID: session.id, agent: "desktop",
+      model: { providerID: ProviderV2.ID.make("groq"), modelID: ModelV2.ID.make("openai/gpt-oss-120b") },
+      parts: [{ type: "text", text: "Open TextEdit. Use look to read the New Document label on screen, then use click_text on its recognized visual target to create a document. Type exactly Hello from OliveCode, verify the text, and leave it unsaved. This task explicitly allows the window capture." }] })
+    expect(result.info.role === "assistant" && result.info.error).toBeUndefined()
+    expect(desktopActions.some((action) => action.action === "activate" && action.app === "com.apple.TextEdit")).toBe(true)
+    const typed = desktopActions.filter((action) => ["type", "fill"].includes(action.action))
+    expect(desktopActions.some((action) => action.action === "look")).toBe(true)
+    expect(desktopActions.some((action) => action.action === "click_text" && action.target === 11)).toBe(true)
+    const history = yield* sessions.messages({ sessionID: session.id })
+    const capture = history.flatMap((message) => message.parts).find((part) => part.type === "tool" && part.state.input.action === "look") as CompletedToolPart
+    expect(capture.state.attachments?.length ?? 0).toBe(0)
+    expect(typed).toHaveLength(1)
+    expect(typed[0]?.text).toBe("Hello from OliveCode")
+    expect(result.parts.some((part) => part.type === "text" && part.text.trim())).toBe(true)
+    expect(desktopActions.some((action) => action.action === "key" && action.key === "s")).toBe(false)
+  }), 90_000,
+)
+
+desktopIt.instance("Desktop verifies an input receipt without typing twice or reading unrelated windows", () =>
+  Effect.gen(function* () {
+    desktopActions.length = 0
+    unverifiedNextTyping = true
+    const { llm } = yield* useServerConfig((url) => ({ ...providerCfg(url), collaboration: { teamwork: false, followThrough: false } }))
+    const prompt = yield* SessionPrompt.Service
+    const sessions = yield* Session.Service
+    const session = yield* sessions.create({ title: "Pinned", permission: [{ permission: "desktop", pattern: "*", action: "allow" }] })
+    yield* prompt.prompt({ sessionID: session.id, agent: "desktop", model: ref, noReply: true, parts: [{ type: "text", text: "Find TextEdit by name and create an unsaved document containing Hello from OliveCode." }] })
+    yield* llm.tool("desktop", { action: "find_app", query: "TextEdit" })
+    yield* llm.tool("desktop", { action: "activate", app: "com.apple.TextEdit" })
+    yield* llm.tool("desktop", { action: "click", target: 6 })
+    yield* llm.tool("desktop", { action: "type", text: "Hello from OliveCode" })
+    yield* llm.tool("desktop", { action: "focus" })
+    yield* llm.text("Verified Hello from OliveCode in the unsaved document.")
+    const result = yield* prompt.loop({ sessionID: session.id })
+    expect(result.info.role === "assistant" && result.info.error).toBeUndefined()
+    expect(desktopActions.filter((action) => action.action === "type")).toHaveLength(1)
+    const history = yield* sessions.messages({ sessionID: session.id })
+    const tools = history.flatMap((message) => message.parts).filter((part) => part.type === "tool") as CompletedToolPart[]
+    expect(JSON.parse(tools.at(-1)!.state.output)).toMatchObject({ bundle: "com.apple.TextEdit", text: "Hello from OliveCode", documentModified: true })
+    expect(Coordination.failedComputerAction(history)).toBeUndefined()
+  }).pipe(Effect.ensuring(Effect.sync(() => { unverifiedNextTyping = false }))),
+)
+
+
+;(process.platform === "darwin" ? desktopIt.instance : desktopIt.instance.skip)("unified Computer task reads a website then types its heading in TextEdit", () => Effect.gen(function* () {
+  const { llm } = yield* useServerConfig(providerCfg)
+  const prompt = yield* SessionPrompt.Service
+  const sessions = yield* Session.Service
+  desktopActions.length = 0
+  const session = yield* sessions.create({ title: "Unified computer", permission: [{ permission: "*", pattern: "*", action: "allow" }] })
+  yield* prompt.prompt({ sessionID: session.id, agent: "computer", noReply: true, parts: [{ type: "text", text: "Read example.com and put its heading in a new unsaved TextEdit document." }] })
+  yield* llm.tool("browser", { action: "open", url: "https://example.com" })
+  yield* llm.tool("desktop", { action: "status" })
+  yield* llm.tool("desktop", { action: "activate", app: "com.apple.TextEdit" })
+  yield* llm.tool("desktop", { action: "click", target: 6 })
+  yield* llm.tool("desktop", { action: "type", text: "Example Domain" })
+  yield* llm.tool("desktop", { action: "observe" })
+  yield* llm.text("Verified Example Domain in the unsaved document.")
+  const result = yield* prompt.loop({ sessionID: session.id })
+  expect(result.parts.some((part) => part.type === "text" && part.text.includes("Verified Example Domain"))).toBe(true)
+  const history = yield* MessageV2.filterCompactedEffect(session.id)
+  const tools = history.flatMap((message) => message.parts).filter((part) => part.type === "tool")
+  expect(tools).toHaveLength(6)
+  expect(tools.every((part) => part.type === "tool" && part.state.status === "completed")).toBe(true)
+  expect(desktopActions.filter((action) => action.action === "type").map((action) => action.text)).toEqual(["Example Domain"])
+  const requests = yield* llm.inputs
+  expect(JSON.stringify(requests[0])).toContain("Keep each tool's observations and target IDs separate")
+}))

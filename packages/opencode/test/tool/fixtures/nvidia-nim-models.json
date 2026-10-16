@@ -1,7 +1,7 @@
 {
-  "_comment": "Cached snapshot of NVIDIA NIM served-model list. Source: live GET https://integrate.api.nvidia.com/v1/models (needs no key). $0 basis: free trial tier with no credit card (per build.nvidia.com docs), rate-limited with no time limit (per NVIDIA forum staff); signup requires phone verification. Verified 2026-09-10; re-verify if the guard test fails.",
+  "_comment": "Live public catalog snapshot fetched 2026-09-19 (82 models). DeepSeek V4 Pro 0813 is absent; Kimi K2.6 remains present. This endpoint proves served IDs, not account eligibility or per-model pricing. Prior 2026-09-10 free-trial/no-card evidence remains documented in the project handoff. Re-verify account access before release.",
   "source": "https://integrate.api.nvidia.com/v1/models",
-  "verified": "2026-09-10",
+  "verified": "2026-09-19",
   "models": [
     {
       "id": "01-ai/yi-large",
@@ -33,10 +33,6 @@
     },
     {
       "id": "deepseek-ai/deepseek-v4-flash-0731",
-      "owned_by": "deepseek-ai"
-    },
-    {
-      "id": "deepseek-ai/deepseek-v4-pro-0813",
       "owned_by": "deepseek-ai"
     },
     {
@@ -264,6 +260,10 @@
       "owned_by": "nvidia"
     },
     {
+      "id": "nvidia/nemotron-parse-2.0",
+      "owned_by": "nvidia"
+    },
+    {
       "id": "nvidia/neva-22b",
       "owned_by": "nvidia"
     },
@@ -318,6 +318,14 @@
     {
       "id": "writer/palmyra-med-70b-32k",
       "owned_by": "writer"
+    },
+    {
+      "id": "z-ai/glm-5.3",
+      "owned_by": "z-ai"
+    },
+    {
+      "id": "z-ai/glm-5.3-flash",
+      "owned_by": "z-ai"
     },
     {
       "id": "zyphra/zamba2-7b-instruct",

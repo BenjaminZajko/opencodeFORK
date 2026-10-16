@@ -1,0 +1,48 @@
+name: OliveCode Cloudflare website bundle
+
+on:
+  workflow_dispatch:
+    inputs:
+      enable_downloads:
+        description: 'Enable only after the public native-tested app release exists'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: olivecode-cloudflare-package
+  cancel-in-progress: false
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    env:
+      OLIVECODE_SITE_ENV: production
+      OLIVECODE_SITE_HOST: Cloudflare Pages
+      OLIVECODE_PUBLIC_ORIGIN: https://olivecode.dev
+      OLIVECODE_RELEASE_READY: ${{ inputs.enable_downloads }}
+      OLIVECODE_RELEASE_VERIFICATION: ${{ runner.temp }}/olivecode-release.json
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+      - run: bun install --cwd site --frozen-lockfile
+      - name: Verify public native-tested release before enabling installers
+        if: inputs.enable_downloads
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: bun distribution/verify-release.ts --output "$OLIVECODE_RELEASE_VERIFICATION"
+      - name: Installer, metadata, release-gate and build checks
+        working-directory: site
+        run: bun test ./install.test.ts ./launch.test.ts
+      - run: bun site/prepare.ts
+      - run: bun site/check-launch.ts
+      - run: bun site/package.ts
+      - uses: actions/upload-artifact@v4
+        with:
+          name: OliveCode-Cloudflare-upload
+          path: distribution/cloudflare/*
+          if-no-files-found: error

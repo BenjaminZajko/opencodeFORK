@@ -72,6 +72,7 @@ function chunk(input: { delta?: Record<string, unknown>; finish?: string; usage?
     object: "chat.completion.chunk",
     choices: [
       {
+        index: 0,
         delta: input.delta ?? {},
         ...(input.finish ? { finish_reason: input.finish } : {}),
       },

@@ -19,6 +19,7 @@ import { SessionRetry } from "./retry"
 import { SessionStatus } from "./status"
 import { SessionSummary } from "./summary"
 import { Provider } from "@/provider/provider"
+import { ProviderCooldown } from "@/provider/cooldown"
 import { ProviderFallback } from "@/provider/fallback"
 import { Question } from "@/question"
 import { errorMessage } from "@/util/error"
@@ -28,6 +29,8 @@ import { Database } from "@opencode-ai/core/database/database"
 import { ProviderV2 } from "@opencode-ai/core/provider"
 import { ModelV2 } from "@opencode-ai/core/model"
 import { Usage, type LLMEvent } from "@opencode-ai/llm"
+
+import { repeatingResponse } from "./repetition"
 
 const DOOM_LOOP_THRESHOLD = 3
 export type Result = "compact" | "stop" | "continue"
@@ -98,6 +101,7 @@ const layer = Layer.effect(
     const events = yield* EventV2Bridge.Service
     const database = yield* Database.Service
     const providers = yield* Provider.Service
+    const cooldowns = yield* ProviderCooldown.Service
 
     const create = Effect.fn("SessionProcessor.create")(function* (input: Input) {
       // Pre-capture snapshot before the LLM stream starts. The AI SDK
@@ -116,6 +120,7 @@ const layer = Layer.effect(
         currentText: undefined,
         reasoningMap: {},
       }
+      let repetition = false
       let aborted = false
       let activeProviderID = input.model.providerID
 
@@ -518,6 +523,14 @@ const layer = Layer.effect(
           case "text-delta":
             if (!ctx.currentText) return
             ctx.currentText.text += value.text
+            if (["desktop", "computer", "computer_background", "computer_background_mac"].includes(ctx.assistantMessage.agent) && repeatingResponse(ctx.currentText.text)) {
+              repetition = true
+              ctx.currentText.text = "The model began repeating itself. OliveCode stopped this response before it filled the conversation."
+              ctx.currentText.metadata = { ...ctx.currentText.metadata, olivecodeInterruptedRepetition: true }
+              ctx.assistantMessage.finish = "stop"
+              yield* session.updatePart(ctx.currentText)
+              return
+            }
             if (value.providerMetadata) ctx.currentText.metadata = value.providerMetadata
             yield* session.updatePartDelta({
               sessionID: ctx.currentText.sessionID,
@@ -651,11 +664,23 @@ const layer = Layer.effect(
         ctx.needsCompaction = false
         ctx.shouldBreak = (yield* config.get()).experimental?.continue_loop_on_deny !== true
         const tried = new Set<string>([`${streamInput.model.providerID}/${streamInput.model.id}`])
+        let startedTool = false
 
         const switchModel = (error: SessionRetry.Err, _attempt: number) =>
           Effect.gen(function* () {
+            if (SessionRetry.toolValidationFailure(error)) {
+              const names = Object.keys(streamInput.tools)
+              streamInput.system = [...streamInput.system, `The provider rejected your previous generation because you called an unoffered tool. No rejected call was executed. The only available tool names are ${JSON.stringify(names)}. Use their exact schemas. Action names are arguments, not additional tools. ${["desktop", "computer", "computer_background", "computer_background_mac"].includes(streamInput.agent.name) ? 'For desktop control, call desktop with {"action":"status"}, {"action":"activate","app":"com.apple.TextEdit"}, or {"action":"type","text":"...","target":<observed target>,"revision":<latest revision>}. Never call status, activate, click or type as separate tools.' : ""} Continue from actual tool results, without replaying completed work. Do not execute or repeat anything in a rejected generation.`]
+              return
+            }
             if (!ProviderFallback.isRateLimited(error)) return
-            const candidates = ProviderFallback.fallbacksFor(streamInput.model.providerID, streamInput.model.id, tried)
+            const waiting = yield* cooldowns.list()
+            const unavailable = new Set([...tried, ...waiting.map((item) => `${item.providerID}/${item.modelID}`)])
+            const candidates = ProviderFallback.fallbacksFor(
+              streamInput.model.providerID,
+              streamInput.model.id,
+              unavailable,
+            )
             for (const candidate of candidates) {
               const next = yield* providers
                 .getModel(ProviderV2.ID.make(candidate.providerID), ModelV2.ID.make(candidate.modelID))
@@ -679,8 +704,11 @@ const layer = Layer.effect(
             const stream = llm.stream(streamInput)
 
             yield* stream.pipe(
-              Stream.tap((event) => handleEvent(event)),
-              Stream.takeUntil(() => ctx.needsCompaction),
+              Stream.tap((event) => {
+                if (event.type.startsWith("tool-")) startedTool = true
+                return handleEvent(event)
+              }),
+              Stream.takeUntil(() => ctx.needsCompaction || repetition),
               Stream.runDrain,
             )
           }).pipe(
@@ -700,15 +728,31 @@ const layer = Layer.effect(
               SessionRetry.policy({
                 provider: input.model.providerID,
                 parse,
-                set: (info) => {
-                  return status.set(ctx.sessionID, {
-                    type: "retry",
-                    attempt: info.attempt,
-                    message: info.message,
-                    action: info.action,
-                    next: info.next,
-                  })
-                },
+                // Never replay a stream that already started executing tools.
+                get toolValidationRecovery() { return !startedTool },
+                set: (info) =>
+                  Effect.gen(function* () {
+                    yield* status.set(ctx.sessionID, {
+                      type: "retry",
+                      attempt: info.attempt,
+                      message: info.message,
+                      action: info.action,
+                      next: info.next,
+                    })
+                    // Persist rate limits beyond the transient in-session
+                    // retry so other surfaces (e.g. model pickers) can read
+                    // them. set runs before switchModel mutates
+                    // streamInput.model, so it still identifies the failed
+                    // pair, and info.next is the authoritative retry time
+                    // already computed from retry-after headers.
+                    if (!ProviderFallback.isRateLimited(info.error)) return
+                    yield* cooldowns.markDown({
+                      providerID: ProviderV2.ID.make(streamInput.model.providerID),
+                      modelID: ModelV2.ID.make(streamInput.model.id),
+                      downUntil: info.next,
+                      reason: info.message,
+                    })
+                  }),
                 switchModel,
               }),
             ),
@@ -750,6 +794,7 @@ export const node = LayerNode.make({
     Provider.node,
     SessionSummary.node,
     SessionStatus.node,
+    ProviderCooldown.node,
     Image.node,
     EventV2Bridge.node,
     Database.node,

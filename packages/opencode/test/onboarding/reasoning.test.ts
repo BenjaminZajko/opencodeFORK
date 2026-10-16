@@ -18,15 +18,7 @@ import {
   type ModelCatalog,
   type ModelEntry,
 } from "../../src/onboarding/reasoning"
-import {
-  appleSilicon,
-  cpuOnly,
-  localEntry,
-  macStudio,
-  nvidiaBox,
-  tinyCatalog,
-  unknownHost,
-} from "./helpers"
+import { appleSilicon, cpuOnly, localEntry, macStudio, nvidiaBox, tinyCatalog, unknownHost } from "./helpers"
 
 // Port of OliveCode tests/test_reasoning.py + tests/test_model_catalog.py.
 // Python mocks reasoning.llm for 3 narration tests; the TS port is
@@ -39,7 +31,7 @@ function recommendTiny(profile: Parameters<typeof recommend>[0]) {
 
 describe("effective memory", () => {
   it("subtracts small headroom on apple silicon", () => {
-    expect(effectiveMemoryGb(appleSilicon(24))).toBeCloseTo(20.0)
+    expect(effectiveMemoryGb(appleSilicon(24))).toBeCloseTo(18.0)
   })
 
   it("adds vram plus ram offload slice on nvidia", () => {
@@ -71,12 +63,12 @@ describe("viability", () => {
   it("gates server class on 150gb pools", () => {
     const m = { ...localEntry("srv", 1.0, 290.0), serverClass: true }
     expect(viable(macStudio(64), m, 60.0)).toBe(false)
-    expect(viable(macStudio(256), m, 252.0)).toBe(true)
+    expect(viable(macStudio(256), m, 252.0)).toBe(false)
   })
 
   it("applies the server gate before fit classification", () => {
     const m = { ...localEntry("srv", 1.0, 290.0), serverClass: true }
-    expect(viable(macStudio(256), m, 252.0)).toBe(true)
+    expect(viable(macStudio(256), m, 252.0)).toBe(false)
   })
 
   it("trusts only tiny models on unknown hosts", () => {
@@ -86,10 +78,10 @@ describe("viability", () => {
 })
 
 describe("recommendation matrix", () => {
-  it("picks the comfortable quality model on a mid mac", () => {
+  it("picks the quality model with a tighter fit on a mid mac", () => {
     const r = recommendTiny(appleSilicon(24))
     expect(r.primaryLocal?.model.id).toBe("mid:14b")
-    expect(r.primaryLocal?.fit).toBe("comfortable")
+    expect(r.primaryLocal?.fit).toBe("tight")
   })
 
   it("prefers comfortable over tight flagship on a big mac", () => {
@@ -120,7 +112,7 @@ describe("recommendation matrix", () => {
   })
 
   it("offers server class on huge unified memory", () => {
-    const r = recommendTiny(macStudio(256))
+    const r = recommendTiny(macStudio(512))
     const ids = new Set([r.primaryLocal?.model.id, ...r.alternates.map((a) => a.model.id)])
     expect(ids.has("server:480b")).toBe(true)
   })
@@ -217,8 +209,8 @@ describe("cloud-first tiebreak", () => {
   })
 
   it("leads with local on a strictly-winning comfortable fit", () => {
-    // apple_silicon(24): mid:14b comfortable outscores the cloud pick.
-    const r = recommendTiny(appleSilicon(24))
+    // A 32 GiB Mac leaves enough headroom for the quality pick.
+    const r = recommendTiny(appleSilicon(32))
     expect(r.primary).toBe("local")
   })
 
@@ -308,15 +300,14 @@ describe("baseline invariants", () => {
     for (const m of [...LOCAL_MODELS, ...CLOUD_MODELS]) expect(m.contextWindow).toBeGreaterThan(0)
   })
 
-  it("always ships a free cloud", () => {
-    expect(CLOUD_MODELS.some((m) => m.freeTier)).toBe(true)
+  it("leaves cloud catalog to the connected provider selector", () => {
+    expect(CLOUD_MODELS).toEqual([])
   })
 
   it("covers tiny to huge on the size ladder", () => {
-    const needs = LOCAL_MODELS.map((m) => m.ramQ4Gb ?? 0.0).sort((a, b) => a - b)
-    expect(needs[0]).toBeLessThanOrEqual(2.0)
-    const biggest = LOCAL_MODELS.reduce((a, b) => ((b.ramQ4Gb ?? 0) > (a.ramQ4Gb ?? 0) ? b : a))
-    expect(biggest.serverClass).toBe(true)
+    const needs = LOCAL_MODELS.map(estimatedRamGb).sort((a, b) => a - b)
+    expect(needs[0]).toBeLessThanOrEqual(4)
+    expect(needs.at(-1)).toBeGreaterThan(64)
   })
 
   it("flags server-class entries", () => {
@@ -390,19 +381,28 @@ describe("serialisation round trip", () => {
     const cat = createCatalog()
     const clone = catalogFromJson(JSON.parse(JSON.stringify(catalogToJson(cat))))
     expect(clone.local.length).toBeGreaterThan(0)
-    expect(clone.cloud.length).toBeGreaterThan(0)
+    expect(clone.cloud).toEqual([])
   })
 })
 
 describe("catalog access", () => {
   it("finds entries by id", () => {
     const cat = createCatalog()
-    expect(catalogFind(cat, "qwen2.5-coder:7b")?.family).toBe("qwen2.5-coder")
+    expect(catalogFind(cat, "qwen3.5:9b-q4_K_M")?.family).toBe("qwen3.5")
     expect(catalogFind(cat, "nope")).toBeUndefined()
   })
 
   it("sorts locals by coding score", () => {
     const sorted = localSortedByCoding(createCatalog())
-    expect(sorted[0].id).toBe("qwen3-coder:480b-a35b")
+    expect(sorted[0].id).toBe("qwen3-coder-next:q4_K_M")
   })
+})
+
+it("recommends a comfortable Q4 model for a 24 GiB Apple Silicon Mac", () => {
+  const result = recommend(appleSilicon(24))
+  expect(result.primaryLocal?.model.id).toBe("qwen3.5:9b-q4_K_M")
+  expect(result.primaryLocal?.fit).toBe("comfortable")
+  expect(result.alternates.some((item) => item.model.id === "qwen3-coder-next:q4_K_M")).toBe(false)
+  expect(recommend(cpuOnly(2)).primaryLocal).toBeUndefined()
+  expect(viable(cpuOnly(64), LOCAL_MODELS.find((m) => m.appleOnly)!, 60)).toBe(false)
 })

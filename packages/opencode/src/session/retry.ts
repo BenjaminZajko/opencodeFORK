@@ -40,6 +40,13 @@ const RETRYABLE_MESSAGE_PATTERNS = [
   /\btry again (?:later|in\b)|\b(?:currently|temporarily) at capacity\b/i,
 ]
 
+export function toolValidationFailure(error: Err) {
+  if (SessionV1.APIError.isInstance(error) && error.data.statusCode !== undefined && error.data.statusCode !== 400) return false
+  const data = isRecord(error.data) ? error.data : {}
+  const detail = [data.message, data.responseBody].filter((value) => typeof value === "string").join("\n")
+  return /tool call validation failed/i.test(detail) && /(?:attempted to call tool|not in request\.tools)/i.test(detail)
+}
+
 function cap(ms: number) {
   return Math.min(ms, RETRY_MAX_DELAY)
 }
@@ -85,6 +92,7 @@ function exponential(attempt: number, random: number) {
 export function retryable(error: Err, provider: string) {
   // context overflow errors should not be retried
   if (SessionV1.ContextOverflowError.isInstance(error)) return undefined
+  if (toolValidationFailure(error)) return { message: "Correcting the model’s tool call" }
   if (SessionV1.APIError.isInstance(error)) {
     const status = error.data.statusCode
     // 5xx errors are transient server failures and should always be retried,
@@ -183,23 +191,35 @@ function parseJSON(value: unknown) {
 export function policy(opts: {
   provider: string
   parse: (error: unknown) => Err
-  set: (input: { attempt: number; message: string; action?: Retryable["action"]; next: number }) => Effect.Effect<void>
+  set: (input: {
+    attempt: number
+    message: string
+    action?: Retryable["action"]
+    next: number
+    error: Err
+  }) => Effect.Effect<void>
   switchModel?: (error: Err, attempt: number) => Effect.Effect<void>
+  toolValidationRecovery?: boolean
 }) {
+  let toolRepairs = 0
   return Schedule.fromStepWithMetadata(
     Effect.succeed((meta: Schedule.InputMetadata<unknown>) => {
       const error = opts.parse(meta.input)
+      const repair = toolValidationFailure(error)
+      if (repair && (opts.toolValidationRecovery === false || toolRepairs >= 2)) return Cause.done(meta.attempt)
       const retry = retryable(error, opts.provider)
       if (!retry) return Cause.done(meta.attempt)
       if (meta.attempt > RETRY_MAX_RETRIES) return Cause.done(meta.attempt)
       return Effect.gen(function* () {
-        const wait = delay(meta.attempt, SessionV1.APIError.isInstance(error) ? error : undefined)
+        if (repair) toolRepairs++
+        const wait = repair ? 0 : delay(meta.attempt, SessionV1.APIError.isInstance(error) ? error : undefined)
         const now = yield* Clock.currentTimeMillis
         yield* opts.set({
           attempt: meta.attempt,
           message: retry.message,
           action: retry.action,
           next: now + wait,
+          error,
         })
         if (opts.switchModel) yield* opts.switchModel(error, meta.attempt)
         return [meta.attempt, Duration.millis(wait)] as [number, Duration.Duration]

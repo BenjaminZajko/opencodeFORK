@@ -360,6 +360,25 @@ async function detectCpuWindows(profile: HardwareProfile, run: RunFn): Promise<v
       }
     }
   }
+  if (code !== 0 || !stdout.trim()) {
+    const fallback = await run([
+      "powershell.exe", "-NoProfile", "-NonInteractive", "-Command",
+      "Get-CimInstance Win32_Processor | Select-Object Name,NumberOfCores,NumberOfLogicalProcessors | ConvertTo-Json -Compress",
+    ])
+    if (fallback.code === 0 && fallback.stdout.trim()) {
+      try {
+        const data = JSON.parse(fallback.stdout) as Record<string, unknown> | Record<string, unknown>[]
+        const cpus = Array.isArray(data) ? data : [data]
+        profile.cpuModel = String(cpus[0]?.Name || "") || undefined
+        const physical = cpus.reduce((total, cpu) => total + Number(cpu.NumberOfCores || 0), 0)
+        const logical = cpus.reduce((total, cpu) => total + Number(cpu.NumberOfLogicalProcessors || 0), 0)
+        if (physical > 0) profile.cpuCoresPhysical = physical
+        if (logical > 0) profile.cpuCoresLogical = logical
+      } catch {
+        // os.cpus below remains available.
+      }
+    }
+  }
   if (!profile.cpuModel) {
     try {
       profile.cpuModel = os.cpus()[0]?.model || undefined
@@ -521,8 +540,22 @@ export async function detectWindowsGpusWmi(run: RunFn = runCommand): Promise<Gpu
     "Name,AdapterRAM,DriverVersion",
     "/value",
   ])
-  if (code !== 0 || !stdout) return []
-  return parseWmiVideoControllers(stdout)
+  if (code === 0 && stdout.trim()) return parseWmiVideoControllers(stdout)
+  const fallback = await run([
+    "powershell.exe", "-NoProfile", "-NonInteractive", "-Command",
+    "Get-CimInstance Win32_VideoController | Select-Object Name,AdapterRAM,DriverVersion | ConvertTo-Json -Compress",
+  ])
+  if (fallback.code !== 0 || !fallback.stdout.trim()) return []
+  try {
+    const data = JSON.parse(fallback.stdout) as Record<string, unknown> | Record<string, unknown>[]
+    const controllers = Array.isArray(data) ? data : [data]
+    const records = controllers.map((gpu) =>
+      `AdapterRAM=${gpu.AdapterRAM ?? ""}\nDriverVersion=${gpu.DriverVersion ?? ""}\nName=${gpu.Name ?? ""}`,
+    )
+    return parseWmiVideoControllers(records.join("\n\n"))
+  } catch {
+    return []
+  }
 }
 
 export async function detectGpus(profile: HardwareProfile, deps?: DetectDeps): Promise<void> {

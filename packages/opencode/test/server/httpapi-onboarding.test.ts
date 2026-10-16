@@ -64,7 +64,7 @@ describe("onboarding HttpApi", () => {
     expect(response.status).toBe(200)
     expect(await response.json()).toMatchObject({
       providerID: "openrouter",
-      modelID: "cohere/north-mini-code:free",
+      modelID: "poolside/laguna-s-2.1:free",
     })
   })
 })

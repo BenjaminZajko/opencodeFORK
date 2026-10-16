@@ -149,6 +149,27 @@ describe("session.retry.delay", () => {
 })
 
 describe("session.retry.retryable", () => {
+  test("recognizes only provider tool-name rejection, including streamed errors", () => {
+    const message = "Tool call validation failed: attempted to call tool 'type' which was not in request.tools"
+    expect(SessionRetry.toolValidationFailure(wrap(JSON.stringify({ message, type: "invalid_request_error" })))).toBe(true)
+    const error = (statusCode: number, message: string) => new SessionV1.APIError({ statusCode, message, isRetryable: false }).toObject()
+    expect(SessionRetry.toolValidationFailure(error(400, message))).toBe(true)
+    expect(SessionRetry.retryable(error(400, message), "groq")).toEqual({ message: "Correcting the model’s tool call" })
+    for (const status of [401, 403, 429]) expect(SessionRetry.toolValidationFailure(error(status, message))).toBe(false)
+    for (const message of ["Invalid API key", "Invalid request schema", "Permission rejected", "Desktop control stopped", "Context length exceeded"])
+      expect(SessionRetry.toolValidationFailure(error(400, message))).toBe(false)
+  })
+
+  it.instance("tool-name recovery is forbidden once a tool stream started", () => Effect.gen(function* () {
+    let updates = 0
+    const error = wrap("Tool call validation failed: attempted to call tool 'type' which was not in request.tools")
+    const step = yield* Schedule.toStepWithMetadata(SessionRetry.policy({ provider: "groq", parse: () => error,
+      toolValidationRecovery: false, set: () => Effect.sync(() => { updates++ }),
+    }))
+    yield* step(error).pipe(Effect.ignore)
+    expect(updates).toBe(0)
+  }))
+
   test("retries serialized too_many_requests messages", () => {
     const error = wrap(JSON.stringify({ type: "error", error: { type: "too_many_requests" } }))
     expect(SessionRetry.retryable(error, retryProvider)).toEqual({ message: "Too Many Requests" })
