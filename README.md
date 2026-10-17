@@ -42,6 +42,12 @@ OliveCode has no subscription, credit packs or usage cap of its own. This does *
 
 [![OliveCode terminal welcome screen](site/assets/app-welcome.webp)](https://olivecode.dev/)
 
+## Try a reproducible coding task
+
+[Free coding-agent guide](https://olivecode.dev/free-ai-coding-agent) · [Local Ollama walkthrough](https://olivecode.dev/local-ai-coding) · [Starter and observed result](docs/examples/slugify)
+
+The slugify example contains ten fixed tests and an incomplete function. In one observed run, public OliveCode 0.1.0 with Laguna S 2.1 (free) and Assist changed the function from 4 passing / 6 failing to 10 passing / 0 failing tests. An independent rerun passed and the test file was unchanged. This is a small maintainer-run demonstration, not a general or comparative performance benchmark; the model, release, resulting code and limitations are recorded in the example.
+
 ## Status and support
 
 This is a public preview. Review model output and approve actions carefully. The Windows/macOS/Linux packages passed native build and installer checks; that does not establish every hardware and workflow combination works. WhatsApp is an advanced setup preview and is not a generally available plug-and-play integration.
