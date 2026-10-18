@@ -1,4 +1,4 @@
-<p align="center"><a href="https://olivecode.dev/"><img src="site/assets/logo-dark.svg" width="520" alt="OliveCode"></a></p>
+<p align="center"><a href="https://olivecode.dev/"><img src="https://olivecode.dev/assets/logo-dark.svg" width="520" alt="OliveCode"></a></p>
 
 # OliveCode
 
@@ -40,7 +40,7 @@ The installer selects your architecture, verifies the package checksum and insta
 
 OliveCode has no subscription, credit packs or usage cap of its own. This does **not** mean unlimited cloud-provider access or free access to every proprietary model. Local inference runs on your computer; cloud models and online tools use their respective services. Read the [privacy information](https://olivecode.dev/privacy).
 
-[![OliveCode terminal welcome screen](site/assets/app-welcome.webp)](https://olivecode.dev/)
+[![OliveCode terminal welcome screen](https://olivecode.dev/assets/app-welcome.webp)](https://olivecode.dev/)
 
 ## Try a reproducible coding task
 
@@ -60,4 +60,4 @@ OliveCode is a separate project derived from [OpenCode](https://github.com/anoma
 
 ## Development
 
-This repository includes the upstream monorepo and OliveCode-specific application, terminal UI, distribution and website work. Read [AGENTS.md](AGENTS.md) for repository conventions. Run checks from the relevant package directories. The website build and release verification are documented in [site/README.md](site/README.md). Public release packaging is under `distribution/`.
+This repository includes the upstream monorepo and OliveCode-specific application, terminal UI, distribution and website work. Read [AGENTS.md](AGENTS.md) for repository conventions. Run checks from the relevant package directories. The website build and release verification are documented in [the released website source](https://github.com/BenjaminZajko/opencodeFORK/blob/v0.1.0/site/README.md). Public release packaging is documented in the [release source](https://github.com/BenjaminZajko/opencodeFORK/tree/v0.1.0/distribution).
