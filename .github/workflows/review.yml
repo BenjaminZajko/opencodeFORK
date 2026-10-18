@@ -6,10 +6,13 @@ on:
 
 jobs:
   check-guidelines:
+    # This inherited bot belongs to the upstream project.
     if: |
+      github.repository == 'anomalyco/opencode' && (
       github.event.issue.pull_request &&
       startsWith(github.event.comment.body, '/review') &&
       contains(fromJson('["OWNER","MEMBER"]'), github.event.comment.author_association)
+      )
     runs-on: blacksmith-4vcpu-ubuntu-2404
     permissions:
       contents: read
