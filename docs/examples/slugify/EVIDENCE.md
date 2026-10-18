@@ -21,3 +21,7 @@ Before the run, the unchanged starter tests produced 4 pass and 6 fail. Afterwar
 Elapsed wall time was 55.3 seconds for this one observed public-release run, including coordination; this is not a latency benchmark. No retries of this public-release run were needed. An earlier exploratory run used a development build and is not included as a release result.
 
 These ten authored cases cover a small ASCII slug function. They do not establish general correctness, reliability on larger projects, superiority over other products, Unicode handling or local-model quality. Repeating the same prompt with another provider/model may yield different results.
+
+## Walkthrough
+
+[Watch a 36-second condensed playback of the captured CLI events](https://github.com/BenjaminZajko/opencodeFORK/releases/download/v0.1.0/OliveCode-real-coding-walkthrough.mp4). This is an illustrated event transcript, explicitly labeled as a rendering rather than a screen recording. It uses the actual observed action sequence and resulting code; its playback duration is not the model run time.
