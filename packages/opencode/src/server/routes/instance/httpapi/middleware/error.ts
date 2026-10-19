@@ -1,5 +1,6 @@
 import { NamedError } from "@opencode-ai/core/util/error"
 import { ConfigErrorV1 } from "@opencode-ai/core/v1/config/error"
+import { Provider } from "@/provider/provider"
 import { Cause, Effect } from "effect"
 import { HttpRouter, HttpServerError, HttpServerRespondable, HttpServerResponse } from "effect/unstable/http"
 
@@ -16,6 +17,18 @@ export const errorLayer = HttpRouter.middleware<{ handles: unknown }>()((effect)
       if (!defect) return Effect.failCause(cause)
 
       const error = defect.defect
+      if (Provider.NoProvidersError.isInstance(error) || Provider.NoModelsError.isInstance(error)) {
+        return Effect.succeed(
+          HttpServerResponse.jsonUnsafe(
+            new NamedError.Unknown({
+              message: Provider.NoProvidersError.isInstance(error)
+                ? "No model is connected. Open /start in OliveCode to connect a free cloud provider or set up a local model with /local, then try your task again."
+                : "No eligible models are available from this provider. Open /cloud to choose another free model or connect a provider, or use /local for a local model.",
+            }).toObject(),
+            { status: 400 },
+          ),
+        )
+      }
       if (
         ConfigErrorV1.JsonError.isInstance(error) ||
         ConfigErrorV1.InvalidError.isInstance(error) ||
