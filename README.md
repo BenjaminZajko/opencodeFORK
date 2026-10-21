@@ -60,7 +60,7 @@ Try one small task in a disposable project, inspect the actual file changes and 
 
 This is a public preview. Review model output and approve actions carefully. The Windows/macOS/Linux packages passed native build and installer checks; that does not establish every hardware and workflow combination works. WhatsApp is an advanced setup preview and is not a generally available plug-and-play integration.
 
-Report reproducible problems in [Issues](https://github.com/BenjaminZajko/opencodeFORK/issues), removing private code, tokens and personal information. Public project contact: **olivecode.ai@gmail.com**. Official Instagram: [@olivecode_dev](https://www.instagram.com/olivecode_dev/).
+Report reproducible problems in [Issues](https://github.com/BenjaminZajko/opencodeFORK/issues), removing private code, tokens and personal information. Public project contact: **olivecode.ai@gmail.com**. Official channels: [YouTube](https://www.youtube.com/@olivecode_dev) · [TikTok](https://www.tiktok.com/@olivecode.dev) · [Instagram](https://www.instagram.com/olivecode_dev/).
 
 ## Open-source foundation
 
