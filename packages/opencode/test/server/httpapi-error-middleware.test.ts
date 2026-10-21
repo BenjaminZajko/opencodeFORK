@@ -6,6 +6,8 @@ import { Effect, Layer } from "effect"
 import { HttpClient, HttpClientRequest, HttpRouter } from "effect/unstable/http"
 import { errorLayer } from "../../src/server/routes/instance/httpapi/middleware/error"
 import { NotFoundError } from "../../src/storage/storage"
+import { Provider } from "../../src/provider/provider"
+import { ProviderV2 } from "@opencode-ai/core/provider"
 import { testEffect } from "../lib/effect"
 
 const it = testEffect(Layer.mergeAll(NodeHttpServer.layerTest, NodeServices.layer))
@@ -19,6 +21,36 @@ function expectUnknownErrorBody(body: unknown) {
 }
 
 describe("HttpApi error middleware", () => {
+  it.live("returns setup guidance instead of an internal error when no provider is connected", () =>
+    Effect.gen(function* () {
+      yield* HttpRouter.add("GET", "/no-provider", Effect.die(new Provider.NoProvidersError({}))).pipe(
+        Layer.provide(errorLayer),
+        HttpRouter.serve,
+        Layer.build,
+      )
+      const response = yield* HttpClientRequest.get("/no-provider").pipe(HttpClient.execute)
+      const body = yield* response.json
+      expect(response.status).toBe(400)
+      expect(body).toMatchObject({ name: "UnknownError", data: { message: expect.stringContaining("/start") } })
+      expect(JSON.stringify(body)).not.toContain("Unexpected server error")
+    }),
+  )
+
+  it.live("explains how to recover when a provider has no eligible models without leaking its details", () =>
+    Effect.gen(function* () {
+      yield* HttpRouter.add(
+        "GET",
+        "/no-model",
+        Effect.die(new Provider.NoModelsError({ providerID: ProviderV2.ID.make("private-provider-marker") })),
+      ).pipe(Layer.provide(errorLayer), HttpRouter.serve, Layer.build)
+      const response = yield* HttpClientRequest.get("/no-model").pipe(HttpClient.execute)
+      const body = yield* response.json
+      expect(response.status).toBe(400)
+      expect(body).toMatchObject({ name: "UnknownError", data: { message: expect.stringContaining("/cloud") } })
+      expect(JSON.stringify(body)).not.toContain("private-provider-marker")
+    }),
+  )
+
   it.live("returns a safe body for unknown 500 defects", () =>
     Effect.gen(function* () {
       yield* HttpRouter.add("GET", "/boom", Effect.die(new Error("secret stack marker"))).pipe(
