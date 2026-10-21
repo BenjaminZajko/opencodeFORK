@@ -44,6 +44,8 @@ OliveCode has no subscription, credit packs or usage cap of its own. This does *
 
 ## Try a reproducible coding task
 
+**New here? [Try the OliveCode starter](https://github.com/BenjaminZajko/olivecode-starter)** — a downloadable, dependency-free Node.js project with ten fixed tests and a ready-to-paste prompt. Use the template or ZIP, then inspect the actual file changes and run the tests yourself.
+
 [Free coding-agent guide](https://olivecode.dev/free-ai-coding-agent) · [Local Ollama walkthrough](https://olivecode.dev/local-ai-coding) · [Starter and observed result](docs/examples/slugify)
 
 The slugify example contains ten fixed tests and an incomplete function. In one observed run, public OliveCode 0.1.0 with Laguna S 2.1 (free) and Assist changed the function from 4 passing / 6 failing to 10 passing / 0 failing tests. An independent rerun passed and the test file was unchanged. This is a small maintainer-run demonstration, not a general or comparative performance benchmark; the model, release, resulting code and limitations are recorded in the example.
