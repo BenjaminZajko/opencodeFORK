@@ -1,0 +1,39 @@
+name: OliveCode distribution checks
+
+on:
+  push:
+    branches: [codex/distribution-foundation]
+  pull_request:
+    branches: [dev]
+    paths:
+      - packages/opencode/src/acp/service.ts
+      - packages/opencode/src/provider/provider.ts
+      - packages/opencode/test/cli/acp/initialize-auth.test.ts
+      - packages/opencode/test/provider/openrouter-attribution.test.ts
+      - .github/workflows/olivecode-distribution-checks.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: olivecode-distribution-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  distribution:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out the review branch
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          persist-credentials: false
+      - name: Install repository dependencies
+        uses: ./.github/actions/setup-bun
+      - name: Check package types
+        working-directory: packages/opencode
+        run: bun typecheck
+      - name: Verify local attribution transport and ACP login handoff
+        working-directory: packages/opencode
+        run: bun test test/provider/openrouter-attribution.test.ts test/plugin/openrouter.test.ts test/cli/acp/initialize-auth.test.ts
