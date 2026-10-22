@@ -471,13 +471,14 @@ function custom(dep: CustomDep): Record<string, CustomLoader> {
           },
         },
       }),
-    openrouter: () =>
+    openrouter: (provider) =>
       Effect.succeed({
-        autoload: false,
+        autoload: provider.source === "config",
         options: {
           headers: {
-            "HTTP-Referer": "https://opencode.ai/",
-            "X-Title": "opencode",
+            "HTTP-Referer": "https://olivecode.dev",
+            "X-OpenRouter-Title": "OliveCode",
+            "X-OpenRouter-Categories": "cli-agent",
           },
         },
       }),
