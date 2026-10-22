@@ -471,17 +471,21 @@ function custom(dep: CustomDep): Record<string, CustomLoader> {
           },
         },
       }),
-    openrouter: (provider) =>
-      Effect.succeed({
+    openrouter: (provider) => {
+      const headers = new Headers(provider.options.headers as Record<string, string> | undefined)
+      return Effect.succeed({
         autoload: provider.source === "config",
         options: {
           headers: {
-            "HTTP-Referer": "https://olivecode.dev",
-            "X-OpenRouter-Title": "OliveCode",
-            "X-OpenRouter-Categories": "cli-agent",
+            ...(!headers.has("HTTP-Referer") ? { "HTTP-Referer": "https://olivecode.dev" } : {}),
+            ...(!headers.has("X-OpenRouter-Title") && !headers.has("X-Title")
+              ? { "X-OpenRouter-Title": "OliveCode" }
+              : {}),
+            ...(!headers.has("X-OpenRouter-Categories") ? { "X-OpenRouter-Categories": "cli-agent" } : {}),
           },
         },
-      }),
+      })
+    },
     nvidia: (provider) =>
       Effect.succeed({
         autoload: provider.source === "config",
