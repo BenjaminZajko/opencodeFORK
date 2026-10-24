@@ -1,3 +1,4 @@
+import { createRequire, isBuiltin } from "node:module"
 import "core-js/actual/map/group-by.js"
 import { ChildProcess } from "node:child_process"
 import { TextDecoder as CompatibleTextDecoder } from "@kayahr/text-encoding"
@@ -69,5 +70,13 @@ if (Bun.version === "1.0.14") {
     const result = original.apply(this, args)
     if (typeof this.pid === "number" && this.pid > 0) queueMicrotask(() => this.emit("spawn"))
     return result
+  }
+}
+
+if (typeof process.getBuiltinModule !== "function") {
+  const requireBuiltin = createRequire(import.meta.url)
+  process.getBuiltinModule = function (id) {
+    if (typeof id !== "string") throw new TypeError("Builtin module id must be a string")
+    return isBuiltin(id) ? requireBuiltin(id) : undefined
   }
 }

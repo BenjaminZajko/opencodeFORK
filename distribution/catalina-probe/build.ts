@@ -6,7 +6,7 @@ const source = process.env.OLIVECODE_PROBE_SOURCE ?? resolve(dir, "../../package
 const plugin = await import(pathToFileURL(Bun.resolveSync("@opentui/solid/bun-plugin", source)).href)
 const output = dir + "/output"
 const result = await Bun.build({
-  entrypoints: [source + "/src/index.ts", source + "/src/cli/tui/worker.ts"],
+  entrypoints: [source + "/src/index.ts", source + "/src/cli/tui/worker.ts", dir + "/syntax-check.ts"],
   tsconfig: source + "/tsconfig.json",
   plugins: [plugin.createSolidTransformPlugin()],
   target: "bun",
@@ -39,6 +39,7 @@ if (!parser) throw Error("Parser worker asset not emitted")
 for (const [input, name] of [
   ["index.js", "legacy.js"],
   ["worker.js", "worker-legacy.js"],
+  ["syntax-check.js", "syntax-legacy.js"],
 ]) {
   let code = await Bun.file(output + "/" + input).text()
   for (const asset of assets)
@@ -50,7 +51,7 @@ for (const [input, name] of [
     .replaceAll('"__LEGACY_APP_WORKER__"', '__legacyFileURLToPath(new URL("./worker-bootstrap.js",import.meta.url))')
     .replaceAll(
       '"__LEGACY_PARSER_WORKER__"',
-      "__legacyFileURLToPath(new URL(" + JSON.stringify("./" + parser) + ",import.meta.url))",
+      "__legacyFileURLToPath(new URL(" + JSON.stringify("./parser-bootstrap.js") + ",import.meta.url))",
     )
   const lowered = await transform('import {fileURLToPath as __legacyFileURLToPath} from "node:url";\n' + code, {
     target: "es2022",
@@ -66,7 +67,12 @@ for (const [input, name] of [
   )
 }
 const boot = await Bun.build({
-  entrypoints: [dir + "/bootstrap.ts", dir + "/worker-bootstrap.ts", dir + "/runtime-adapters-test.ts"],
+  entrypoints: [
+    dir + "/bootstrap.ts",
+    dir + "/worker-bootstrap.ts",
+    dir + "/runtime-adapters-test.ts",
+    dir + "/parser-bootstrap.ts",
+  ],
   target: "bun",
   format: "esm",
   outdir: output,
@@ -79,4 +85,9 @@ await Bun.write(
 await Bun.$`chmod +x ${output + "/olivecode-probe"}`
 console.log(
   "Built diagnostic compatibility bundle; original native assets retained for architecture comparison, not Catalina certification.",
+)
+
+await Bun.write(
+  output + "/parser-bootstrap.js",
+  (await Bun.file(output + "/parser-bootstrap.js").text()).replaceAll("__PARSER_ASSET__", "./" + parser),
 )

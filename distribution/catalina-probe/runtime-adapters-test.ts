@@ -15,6 +15,9 @@ assert.deepEqual(
     .toArray(),
   [2, 4, 3, 6],
 )
+assert.equal(typeof process.getBuiltinModule("node:fs").readFileSync, "function")
+assert.equal(process.getBuiltinModule("olivecode-not-a-builtin"), undefined)
+assert.throws(() => process.getBuiltinModule({}), TypeError)
 const groups = Map.groupBy(
   [
     { id: "cloud", n: 1 },
