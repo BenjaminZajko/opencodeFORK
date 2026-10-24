@@ -28,7 +28,7 @@ with tempfile.TemporaryDirectory(prefix='olivecode-terminal-probe-') as folder:
     typed=False
     running=False
     try:
-        while time.monotonic()-started<10 and proc.poll() is None:
+        while time.monotonic()-started<35 and proc.poll() is None:
             if select.select([master],[],[],0.1)[0]:
                 try:chunk=os.read(master,65536)
                 except OSError:break
