@@ -53,6 +53,7 @@ export XDG_DATA_HOME="$preview_state/data"
 export XDG_CONFIG_HOME="$preview_state/config"
 export XDG_STATE_HOME="$preview_state/state"
 export XDG_CACHE_HOME="$preview_state/cache"
+export OPENCODE_CONFIG_CONTENT='{"autoupdate":false}'
 if [ "$#" -eq 0 ]; then set -- "$preview_root/Workspace"; fi
 exec "$preview_root/app/olivecode-preview" --pure "$@"
 ''')

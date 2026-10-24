@@ -69,7 +69,7 @@ with tempfile.TemporaryDirectory(prefix='olivecode-terminal-probe-') as folder:
     translated=subprocess.run(['sysctl','-in','sysctl.proc_translated'],capture_output=True,text=True)
     logs={str(f.relative_to(folder)):f.read_text(errors='replace') for f in Path(folder).rglob('*.log') if f.stat().st_size<1024*1024}
     report={'logs':logs,'host_platform':platform.platform(),'host_machine':platform.machine(),'host_translated':translated.stdout.strip()=='1','binary':str(binary),'seconds':round(time.monotonic()-started,2),'running_before_cleanup':running,'exit_code':proc.returncode,'rendered_version':'0.1.0-catalina-probe' in output,'typed':typed,'rendered_input':'compatibility-input' in output,'output':output}
-    report['passed']=running and report['rendered_version'] and report['rendered_input'] and 'Unexpected server error' not in output
+    report['passed']=running and proc.returncode==0 and report['rendered_version'] and report['rendered_input'] and 'Unexpected server error' not in output
     report_path.parent.mkdir(parents=True,exist_ok=True)
     report_path.write_text(json.dumps(report,indent=2)+'\n')
     print(json.dumps({key:value for key,value in report.items() if key not in ('output','logs')},indent=2))
