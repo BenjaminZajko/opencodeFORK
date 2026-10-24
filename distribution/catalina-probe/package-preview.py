@@ -30,11 +30,14 @@ for file in (source/'output').glob('libopentui*.dylib'):
         shutil.copyfile(library,app/file.name)
         break
 else:raise RuntimeError('No x86_64 terminal asset found in application bundle')
+for name in ('timezone-env.sh','timezone-check.js'):
+    shutil.copyfile(source/name,app/name)
 shutil.copyfile(source/'runtime/bun',root/'runtime/bun')
 (root/'runtime/bun').chmod(0o755)
 (app/'olivecode-preview').write_text('''#!/bin/sh
 set -eu
 preview_app=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+. "$preview_app/timezone-env.sh"
 exec "$preview_app/../runtime/bun" --no-install "$preview_app/bootstrap.js" "$@"
 ''')
 (app/'olivecode-preview').chmod(0o755)
@@ -76,7 +79,13 @@ export XDG_CACHE_HOME="$preview_temporary/cache"
   uname -m
   echo "Checking preview file integrity"
   (cd "$preview_root" && shasum -a 256 --status -c SHA256SUMS)
-  echo "Integrity exit: $?"
+  preview_integrity=$?
+  echo "Integrity exit: $preview_integrity"
+  if [ "$preview_integrity" -ne 0 ]; then echo "Preview files failed integrity verification; stopping."; exit 1; fi
+  . "$preview_root/app/timezone-env.sh"
+  echo "Detected timezone: $TZ"
+  "$preview_root/runtime/bun" --no-install "$preview_root/app/timezone-check.js"
+  echo "Timezone check exit: $?"
   "$preview_root/runtime/bun" --version
   echo "Runtime exit: $?"
   "$preview_root/app/olivecode-preview" --version
@@ -105,10 +114,12 @@ console.log("PASS: native Intel terminal library loaded and allocated/freed its 
 This local trial is not a supported public release. Actual macOS 10.15 verification is still needed.
 
 1. Copy this whole folder to the Intel Mac mini and unzip it there.
-2. Double-click Check This Mac.command. It checks startup, the rebuilt native library and syntax highlighting, then saves compatibility-report.txt beside it. It does not use a model account.
+2. Double-click Check This Mac.command. It checks local timezone behavior, startup, the rebuilt native library and syntax highlighting, then saves compatibility-report.txt beside it. It does not use a model account.
 3. If those checks pass, double-click Start OliveCode Preview.command. Try typing and opening the provider/model controls.
 
 The preview keeps its own settings under Library/Application Support/OliveCode Catalina Preview. It does not replace your installed olivecode command. The launcher uses --pure; external plugins and optional computer/background-Mac features are not verified in this preview. The included empty Workspace is only the first-launch location. You can open a project with app/olivecode-preview --pure /path/to/project.
+
+The wrapper reads the local timezone identifier from /etc/localtime when TZ is unset. It passes that identifier to this process and its children to avoid a newer ICU lookup absent on Catalina. An existing nonempty TZ is preserved. It does not change the Mac’s timezone.
 
 This preview uses an archived 2023 runtime. Runtime security/support assessment is still outstanding; it is not ready for general distribution. The upstream public installer still requires the currently supported macOS version. Do not distribute this trial as official Catalina support.
 ''')

@@ -105,7 +105,7 @@ const boot = await Bun.build({
 if (!boot.success) throw new AggregateError(boot.logs)
 await Bun.write(
   output + "/olivecode-probe",
-  '#!/bin/sh\nprobe_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)\nexec "$probe_dir/../runtime/bun" --no-install "$probe_dir/bootstrap.js" "$@"\n',
+  '#!/bin/sh\nprobe_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)\n. "$probe_dir/timezone-env.sh"\nexec "$probe_dir/../runtime/bun" --no-install "$probe_dir/bootstrap.js" "$@"\n',
 )
 await Bun.$`chmod +x ${output + "/olivecode-probe"}`
 console.log(
@@ -116,3 +116,5 @@ await Bun.write(
   output + "/parser-bootstrap.js",
   (await Bun.file(output + "/parser-bootstrap.js").text()).replaceAll("__PARSER_ASSET__", "./" + parser),
 )
+
+await Bun.write(output + "/timezone-env.sh", Bun.file(dir + "/timezone-env.sh"))
