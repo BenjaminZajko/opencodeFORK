@@ -1,4 +1,4 @@
-"""Simulate the unavailable Catalina ICU API; never ship the diagnostic dylib."""
+"""Simulate the thirteen potential Catalina ICU gaps; never ship the diagnostic dylib."""
 import json
 import os
 from pathlib import Path
@@ -18,6 +18,12 @@ with tempfile.TemporaryDirectory(prefix='olivecode-timezone-test-') as folder:
     control = subprocess.run([str(runtime), '--no-install', '-e', 'console.log(new Date(0).toString())'], env=env, text=True, capture_output=True, timeout=20)
     assert control.returncode == 88 and 'TRAP:' in control.stderr, control
     rows.append({'case': 'missing-API control', 'exit': control.returncode, 'expected_exit': 88})
+    number_control = subprocess.run([str(runtime), '--no-install', '-e', 'new Intl.NumberFormat("en-US", {style:"currency",currency:"USD"}).format(1)'], env=dict(env, TZ='Europe/Bratislava'), text=True, capture_output=True, timeout=20)
+    assert number_control.returncode == 88 and 'TRAP:' in number_control.stderr, number_control
+    rows.append({'case': 'missing number-range API control', 'exit': number_control.returncode, 'expected_exit': 88})
+    formatted = subprocess.run(['/bin/sh', '-c', '. "$1/timezone-env.sh"; exec "$1/runtime/bun" --no-install "$1/output/format-check.js"', 'format-test', str(source)], env=env, text=True, capture_output=True, timeout=25)
+    rows.append({'case': 'formatting with unavailable ICU APIs trapped', 'exit': formatted.returncode, 'stdout': formatted.stdout, 'stderr': formatted.stderr})
+    assert formatted.returncode == 0, rows[-1]
     for zone in (None, 'Europe/Bratislava', 'America/New_York', 'Asia/Kolkata', 'Etc/UTC'):
         current = dict(env)
         if zone: current['TZ'] = zone

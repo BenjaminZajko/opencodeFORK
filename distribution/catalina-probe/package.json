@@ -3,6 +3,7 @@
   "private": true,
   "type": "module",
   "dependencies": {
+    "@formatjs/intl-numberformat": "9.4.3",
     "@kayahr/text-encoding": "2.2.0",
     "core-js": "3.51.0",
     "esbuild": "0.25.12",

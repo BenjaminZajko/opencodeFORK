@@ -25,3 +25,13 @@ The pinned engine calls that newer function only when no timezone override is se
 `python3 test-timezone.py results/timezone.json` compiles a test-only interposer that terminates any call to the unavailable function. The negative control must exit 88; automatic detection and four explicit zones must pass winter/summer offset comparisons with `/bin/date`, in both main and worker threads. The actual application version must then start with that same trap active. The interposer is never included in the portable preview.
 
 `package-preview.py` prepares the isolated ZIP using the separately rebuilt Catalina terminal library. Preview r2 adds the timezone fix and an offline timezone check. It still requires another physical Catalina run: simulation of one unavailable API does not establish compatibility of the whole runtime.
+
+## Preview r3: number formatter initialization
+
+The physical Catalina interface launch fails at `_unumrf_openForSkeletonWithCollapseAndIdentityFallback`, even though all r2 offline checks pass. The pinned engine eagerly initializes this newer number-range formatter in the ordinary `Intl.NumberFormat` constructor ([engine source](https://github.com/oven-sh/WebKit/blob/b72b839d2c18ae71952d215a9654797f044b67e7/Source/JavaScriptCore/runtime/IntlNumberFormat.cpp#L560)). The interface initializes USD cost formatters before rendering.
+
+Only on Bun1.0.14, the compatibility adapters now load pinned FormatJS9.4.3 `polyfill-force` with English and Slovak number locale data before importing the application. This implements formatting in JavaScript rather than fabricating an ICU native result. Unsupported number locales use the bundled fallback. Current-runtime controls retain native NumberFormat. Dependencies and locale data are bundled; the preview does not download them when launched. FormatJS licenses accompany the preview.
+
+The offline checker now exercises currency (including negative and zero), compact counts, percentages, Slovak separators, number parts/ranges, errors and other interface Intl helpers in both main and worker threads. The normal version check alone is not an interface compatibility test.
+
+An audit compares all159runtime ICU imports with Apple’s ICU-64260.0.1 public headers. Thirteen imports lack declarations in those headers; this is a conservative potential-gap list, not proof of the exact system dylib exports. The test-only interposer blocks all13, and separate timezone/number negative controls must fail88. The formatting/helper and interface tests must pass with that interposer active. This does not simulate all OS differences; another physical Catalina test remains required.

@@ -80,3 +80,12 @@ if (typeof process.getBuiltinModule !== "function") {
     return isBuiltin(id) ? requireBuiltin(id) : undefined
   }
 }
+
+// The old runtime constructs a newer ICU number-range formatter even for USD.
+// Force a JS implementation before importing application modules; feature
+// detection itself can enter the unavailable native constructor on Catalina.
+if (Bun.version === "1.0.14") {
+  await import("@formatjs/intl-numberformat/polyfill-force.js")
+  await import("@formatjs/intl-numberformat/locale-data/en.js")
+  await import("@formatjs/intl-numberformat/locale-data/sk.js")
+}

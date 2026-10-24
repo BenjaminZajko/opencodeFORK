@@ -96,6 +96,7 @@ const boot = await Bun.build({
     dir + "/bootstrap.ts",
     dir + "/worker-bootstrap.ts",
     dir + "/runtime-adapters-test.ts",
+    dir + "/format-check.ts",
     dir + "/parser-bootstrap.ts",
   ],
   target: "bun",

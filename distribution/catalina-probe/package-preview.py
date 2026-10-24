@@ -14,7 +14,7 @@ root.mkdir(parents=True,exist_ok=False)
 app=root/'app'
 app.mkdir()
 (root/'runtime').mkdir()
-required={'legacy.js','worker-legacy.js','bootstrap.js','worker-bootstrap.js','parser-bootstrap.js','syntax-legacy.js','runtime-adapters-test.js'}
+required={'legacy.js','worker-legacy.js','bootstrap.js','worker-bootstrap.js','parser-bootstrap.js','syntax-legacy.js','runtime-adapters-test.js','format-check.js'}
 for file in (source/'output').iterdir():
     if not file.is_file():continue
     if file.name in required or file.name.startswith('parser.worker') or file.suffix in ('.wasm','.scm','.mp3'):
@@ -42,6 +42,11 @@ exec "$preview_app/../runtime/bun" --no-install "$preview_app/bootstrap.js" "$@"
 ''')
 (app/'olivecode-preview').chmod(0o755)
 shutil.copyfile(source.parent.parent/'LICENSE',root/'LICENSE-OliveCode.txt')
+notices=[]
+for name in ('@formatjs/intl-numberformat','@formatjs/bigdecimal','@formatjs/intl-localematcher','@formatjs/fast-memoize'):
+    metadata=json.loads((source/'node_modules'/name/'package.json').read_text())
+    notices.append(name+' '+metadata['version']+'\n'+(source/'node_modules'/name/'LICENSE.md').read_text())
+(root/'LICENSE-FormatJS.txt').write_text('\n\n'.join(notices))
 (root/'Workspace').mkdir()
 (root/'Workspace/README.md').write_text('A safe empty workspace for the first OliveCode preview launch. Open your own project by passing its path to app/olivecode-preview.\n')
 (root/'Start OliveCode Preview.command').write_text('''#!/bin/sh
@@ -86,6 +91,8 @@ export XDG_CACHE_HOME="$preview_temporary/cache"
   echo "Detected timezone: $TZ"
   "$preview_root/runtime/bun" --no-install "$preview_root/app/timezone-check.js"
   echo "Timezone check exit: $?"
+  "$preview_root/runtime/bun" --no-install "$preview_root/app/format-check.js"
+  echo "Formatting check exit: $?"
   "$preview_root/runtime/bun" --version
   echo "Runtime exit: $?"
   "$preview_root/app/olivecode-preview" --version
@@ -114,12 +121,14 @@ console.log("PASS: native Intel terminal library loaded and allocated/freed its 
 This local trial is not a supported public release. Actual macOS 10.15 verification is still needed.
 
 1. Copy this whole folder to the Intel Mac mini and unzip it there.
-2. Double-click Check This Mac.command. It checks local timezone behavior, startup, the rebuilt native library and syntax highlighting, then saves compatibility-report.txt beside it. It does not use a model account.
+2. Double-click Check This Mac.command. It checks local timezone behavior, number formatting in main/background threads, startup, the rebuilt native library and syntax highlighting, then saves compatibility-report.txt beside it. It does not use a model account.
 3. If those checks pass, double-click Start OliveCode Preview.command. Try typing and opening the provider/model controls.
 
 The preview keeps its own settings under Library/Application Support/OliveCode Catalina Preview. It does not replace your installed olivecode command. The launcher uses --pure; external plugins and optional computer/background-Mac features are not verified in this preview. The included empty Workspace is only the first-launch location. You can open a project with app/olivecode-preview --pure /path/to/project.
 
 The wrapper reads the local timezone identifier from /etc/localtime when TZ is unset. It passes that identifier to this process and its children to avoid a newer ICU lookup absent on Catalina. An existing nonempty TZ is preserved. It does not change the Mac’s timezone.
+
+For the archived runtime, number formatting uses pinned FormatJS JavaScript code and English/Slovak locale data, avoiding newer ICU number-range functions absent on Catalina. Other requested number locales fall back to the bundled locale data.
 
 This preview uses an archived 2023 runtime. Runtime security/support assessment is still outstanding; it is not ready for general distribution. The upstream public installer still requires the currently supported macOS version. Do not distribute this trial as official Catalina support.
 ''')

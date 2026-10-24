@@ -29,7 +29,7 @@ jobs:
       - name: Fetch checksum-verified historical runtime
         id: runtime
         run: python3 distribution/catalina-probe/fetch-runtime.py
-      - name: Check Catalina timezone lookup without the newer ICU API
+      - name: Check Catalina timezone and number formatting without newer ICU APIs
         run: python3 distribution/catalina-probe/test-timezone.py distribution/catalina-probe/results/timezone.json
       - name: Check runtime adapters
         working-directory: distribution/catalina-probe
