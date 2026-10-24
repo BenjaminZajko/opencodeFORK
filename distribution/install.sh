@@ -6,6 +6,30 @@ repo='https://github.com/BenjaminZajko/opencodeFORK/releases/latest/download'
 base=${OLIVECODE_RELEASE_BASE_URL:-$repo}
 system=$(uname -s)
 machine=$(uname -m)
+if [ "$system" = Darwin ]; then
+  # Rosetta reports x86_64 even on Apple Silicon; prefer the native package.
+  if [ "$machine" = x86_64 ] && [ "$(sysctl -in sysctl.proc_translated 2>/dev/null || true)" = 1 ]; then
+    machine=arm64
+  fi
+  if ! macos_version=$(SYSTEM_VERSION_COMPAT=0 sw_vers -productVersion 2>/dev/null); then
+    printf 'Could not detect your macOS version. Nothing was installed.\n' >&2
+    exit 1
+  fi
+  if ! printf '%s\n' "$macos_version" | grep -Eq '^[0-9]{1,3}\.[0-9]{1,3}(\.[0-9]{1,3})?$'; then
+    printf 'Could not understand macOS version: %s. Nothing was installed.\n' "$macos_version" >&2
+    exit 1
+  fi
+  # Current Bun-based release packages require macOS 13 on both CPU families.
+  # A baseline x64 package broadens CPU support, not macOS API availability.
+  if ! printf '%s\n' "$macos_version" | awk -F. '{ exit !($1 >= 13) }'; then
+    printf 'Detected macOS %s (%s).\n' "$macos_version" "$machine" >&2
+    printf 'The current OliveCode release requires macOS 13 or newer.\n' >&2
+    printf 'There is no verified OliveCode build for this macOS version yet.\n' >&2
+    printf 'Nothing was downloaded or installed; any existing installation was left unchanged.\n' >&2
+    printf 'Compatibility details: https://olivecode.dev/guide\n' >&2
+    exit 1
+  fi
+fi
 case "$system:$machine" in
   Darwin:arm64) target=macOS-arm64 ;;
   Darwin:x86_64) target=macOS-x64 ;;
@@ -17,6 +41,9 @@ case "$system:$machine" in
   *) printf 'OliveCode has no installer for %s/%s yet.\n' "$system" "$machine" >&2; exit 1 ;;
 esac
 
+if [ "$system" = Darwin ]; then
+  printf 'Detected macOS %s (%s); selecting OliveCode for %s.\n' "$macos_version" "$machine" "$target"
+fi
 archive="OliveCode-${target}.zip"
 temp=$(mktemp -d)
 trap 'rm -rf "$temp"' EXIT HUP INT TERM
@@ -43,7 +70,15 @@ unzip -q "$temp/$archive" -d "$temp/extracted"
 binary="$temp/extracted/olivecode"
 test -f "$binary" || { printf 'The archive has no OliveCode executable.\n' >&2; exit 1; }
 chmod 755 "$binary"
-version=$("$binary" --version)
+if ! version=$("$binary" --version 2>"$temp/startup-error"); then
+  printf 'The downloaded OliveCode executable could not start on this system.\n' >&2
+  if [ "$system" = Darwin ]; then
+    printf 'Detected macOS %s (%s); selected %s.\n' "$macos_version" "$machine" "$target" >&2
+  fi
+  cat "$temp/startup-error" >&2
+  printf 'Nothing was installed; any existing installation was left unchanged.\n' >&2
+  exit 1
+fi
 case "$version" in *[!0-9A-Za-z.+-]*|'') printf 'Invalid executable version.\n' >&2; exit 1 ;; esac
 printf '%s' "$version" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+([-+][A-Za-z0-9.-]+)?$' || { printf 'Invalid executable version.\n' >&2; exit 1; }
 
