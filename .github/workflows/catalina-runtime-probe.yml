@@ -32,12 +32,17 @@ jobs:
       - name: Check runtime adapters
         working-directory: distribution/catalina-probe
         run: runtime/bun --no-install output/runtime-adapters-test.js
+      - name: Check bounded npm metadata cache
+        working-directory: distribution/catalina-probe
+        run: runtime/bun --no-install output/npm-cache-legacy.js
       - name: Check parser worker and syntax highlighting
         working-directory: distribution/catalina-probe
         run: |
           temporary=$(mktemp -d)
           trap 'rm -rf "$temporary"' EXIT
           runtime/bun --no-install output/syntax-legacy.js "$temporary"
+      - name: Check application and fake-model workflows on native Intel
+        run: python3 script/smoke-olivecode.py "$PWD/distribution/catalina-probe/output/olivecode-probe"
       - name: Prepare current-runtime control
         working-directory: distribution/catalina-probe
         shell: bash

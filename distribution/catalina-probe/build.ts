@@ -6,9 +6,33 @@ const source = process.env.OLIVECODE_PROBE_SOURCE ?? resolve(dir, "../../package
 const plugin = await import(pathToFileURL(Bun.resolveSync("@opentui/solid/bun-plugin", source)).href)
 const output = dir + "/output"
 const result = await Bun.build({
-  entrypoints: [source + "/src/index.ts", source + "/src/cli/tui/worker.ts", dir + "/syntax-check.ts"],
+  entrypoints: [
+    source + "/src/index.ts",
+    source + "/src/cli/tui/worker.ts",
+    dir + "/syntax-check.ts",
+    dir + "/npm-cache-check.ts",
+  ],
   tsconfig: source + "/tsconfig.json",
-  plugins: [plugin.createSolidTransformPlugin()],
+  plugins: [
+    plugin.createSolidTransformPlugin(),
+    {
+      name: "bounded-legacy-npm-cache",
+      setup(build) {
+        build.onLoad({ filter: /[\\/]@npmcli[\\/]arborist[\\/]lib[\\/]packument-cache\.js$/ }, async (args) => {
+          const code = await Bun.file(args.path).text()
+          const needle = "static #heapLimit = Math.floor(getHeapStatistics().heap_size_limit)"
+          if (!code.includes(needle)) throw Error("Npm cache compatibility seam changed; re-audit required")
+          return {
+            loader: "js",
+            contents: code.replace(
+              needle,
+              "static #heapLimit = (()=>{const limit=getHeapStatistics().heap_size_limit; return Number.isFinite(limit)&&limit>0 ? Math.floor(limit):256*1024*1024})()",
+            ),
+          }
+        })
+      },
+    },
+  ],
   target: "bun",
   conditions: ["bun", "node"],
   format: "esm",
@@ -40,6 +64,7 @@ for (const [input, name] of [
   ["index.js", "legacy.js"],
   ["worker.js", "worker-legacy.js"],
   ["syntax-check.js", "syntax-legacy.js"],
+  ["npm-cache-check.js", "npm-cache-legacy.js"],
 ]) {
   let code = await Bun.file(output + "/" + input).text()
   for (const asset of assets)

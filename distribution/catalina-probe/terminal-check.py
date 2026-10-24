@@ -60,7 +60,10 @@ with tempfile.TemporaryDirectory(prefix='olivecode-terminal-probe-') as folder:
     finally:
         if proc.poll() is None:proc.terminate()
         try:proc.wait(timeout=4)
-        except subprocess.TimeoutExpired:proc.kill();proc.wait()
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            try:proc.wait(timeout=3)
+            except subprocess.TimeoutExpired:pass
         os.close(master)
     output=captured.decode(errors='replace')
     translated=subprocess.run(['sysctl','-in','sysctl.proc_translated'],capture_output=True,text=True)
