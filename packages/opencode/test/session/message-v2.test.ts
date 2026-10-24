@@ -1727,3 +1727,49 @@ describe("session.message-v2.latest", () => {
     expect(state.tasks[0]).toMatchObject({ type: "subtask", prompt: "inspect" })
   })
 })
+
+test("local desktop recovery metadata never leaks into provider option namespaces", async () => {
+  const messages = await MessageV2.toModelMessages([
+    { info: assistantInfo("m-local", "m-user"), parts: [
+      { ...basePart("m-local", "p-recovery"), type: "text", text: "Stopped repetitive response.", metadata: { olivecodeInterruptedRepetition: true, olivecodeResponseRecovery: true, openai: { itemId: "msg_provider" } } },
+    ] },
+  ], model)
+  const output = JSON.stringify(messages)
+  expect(output).not.toContain("olivecodeInterruptedRepetition")
+  expect(output).not.toContain("olivecodeResponseRecovery")
+  expect(output).toContain("msg_provider")
+  expect(output).toContain("Stopped repetitive response.")
+})
+
+test("an old repetitive desktop response cannot overflow a resumed model request", async () => {
+  const text = "Wait for the current desktop action to finish. Let's try again. We need to click the New Document button to create a new document. ".repeat(300)
+  const info = assistantInfo("m-old", "m-user"); info.agent = "desktop"
+  const messages = await MessageV2.toModelMessages([{ info, parts: [{ ...basePart("m-old", "p-old"), type: "text", text }] }], model)
+  expect(JSON.stringify(messages)).toContain("Earlier repetitive model output omitted")
+  expect(JSON.stringify(messages).length).toBeLessThan(500)
+})
+
+
+test("desktop history keeps only the current view's controls and image, preserving cursor evidence", async () => {
+  const input: SessionV1.WithParts[] = [{ info: userInfo("pointer-request"), parts: [{ ...basePart("pointer-request", "request"), type: "text", text: "Move the pointer" }] }]
+  for (let index = 0; index < 60; index++) {
+    const id = `desktop-${index}`
+    input.push({ info: assistantInfo(id, "pointer-request"), parts: [{ ...basePart(id, `part-${index}`), type: "tool", tool: "desktop", callID: `call-${index}`, state: {
+      status: "completed", input: { action: "move", x: index, y: 100 }, title: "Move", metadata: {}, time: { start: 0, end: 1 },
+      output: JSON.stringify({ revision: index + 1, bundle: "com.apple.TextEdit", windowAvailable: true, cursor: { x: index, y: 100, inWindow: true }, text: "Unchanged", controls: Array.from({ length: 120 }, (_, target) => ({ target, role: "AXButton", name: "control".repeat(20) })) }),
+      attachments: [{ ...basePart(id, `image-${index}`), type: "file", mime: "image/png", url: "data:image/png;base64,Zm9v" }],
+    } }] })
+  }
+  const before = JSON.stringify(input)
+  const replay = await MessageV2.toModelMessages(input, { ...model, capabilities: { ...model.capabilities, input: { ...model.capabilities.input, image: true } } })
+  const encoded = JSON.stringify(replay)
+  expect(encoded.length).toBeLessThan(before.length / 5)
+  expect(encoded.match(/Zm9v/g)?.length).toBe(1)
+  const results = replay.flatMap((message) => message.role === "tool" ? message.content : []).filter((part) => part.type === "tool-result")
+  expect(results).toHaveLength(60)
+  const first = JSON.parse((results[0].output as { type: "text"; value: string }).value)
+  expect(first.cursor).toEqual({ x: 0, y: 100, inWindow: true })
+  expect(first.controls).toBeUndefined()
+  expect(encoded).toContain('controlcontrol')
+  expect(JSON.stringify(input)).toBe(before)
+})

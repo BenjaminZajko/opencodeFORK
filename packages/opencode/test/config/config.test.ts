@@ -2232,3 +2232,21 @@ test("parseManagedPlist handles empty config", async () => {
   )
   expect(config.$schema).toBe("https://opencode.ai/config.json")
 })
+
+for (const ext of ["json", "jsonc"])
+  it.instance(`OliveCode updates its loaded ${ext} configuration`, () =>
+    Effect.gen(function* () {
+      const instance = yield* TestInstance
+      const fs = yield* FSUtil.Service
+      const file = path.join(instance.directory, `olivecode.${ext}`)
+      yield* fs.writeFileString(
+        file,
+        ext === "jsonc" ? '{ // retain comment\n "username": "before" }' : '{"username":"before"}',
+      )
+      yield* Config.use.update({ username: "after" })
+      const written = yield* fs.readFileString(file)
+      expect(ConfigParse.jsonc(written, file)).toMatchObject({ username: "after" })
+      if (ext === "jsonc") expect(written).toContain("retain comment")
+      expect(yield* fs.exists(path.join(instance.directory, "config.json"))).toBe(false)
+    }),
+  )

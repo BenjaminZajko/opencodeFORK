@@ -5,12 +5,14 @@ import { fileURLToPath, pathToFileURL } from "url"
 import { Effect, Layer, Result, Schema } from "effect"
 import { LayerNode } from "@opencode-ai/core/effect/layer-node"
 import { ToolRegistry } from "@/tool/registry"
+import { Computer } from "@/computer/service"
 import { Tool } from "@/tool/tool"
 import { disposeAllInstances, TestInstance } from "../fixture/fixture"
 import { testEffect } from "../lib/effect"
 import { TestConfig } from "../fixture/config"
 import { Config } from "@/config/config"
 import { Plugin } from "@/plugin"
+import { Permission } from "@/permission"
 import { Agent } from "@/agent/agent"
 import { InstanceState } from "@/effect/instance-state"
 
@@ -50,7 +52,7 @@ const brokenPluginLayer = Layer.succeed(
   }),
 )
 
-const root = LayerNode.group([ToolRegistry.node, Agent.node])
+const root = LayerNode.group([ToolRegistry.node, Agent.node, Computer.node])
 const replacements = [
   [Config.node, configLayer],
   [RuntimeFlags.node, RuntimeFlags.layer()],
@@ -100,6 +102,59 @@ afterEach(async () => {
 })
 
 describe("tool.registry", () => {
+  it.instance("serializes unified browser and desktop turns while isolating chats", () => Effect.gen(function* () {
+    const computer = yield* Computer.Service
+    yield* computer.claimAction("session-a", "message-1")
+    const duplicate = yield* computer.claimAction("session-a", "message-1").pipe(Effect.result)
+    expect(Result.isFailure(duplicate)).toBe(true)
+    yield* computer.claimAction("session-b", "message-1")
+    yield* computer.claimAction("session-a", "message-2")
+    yield* computer.stop("session-a")
+  }))
+  it.instance("background service opens a real isolated page and rejects using it in visible mode", () => Effect.gen(function* () {
+    const server = Bun.serve({ hostname: "127.0.0.1", port: 0, fetch: () => new Response("<title>Background fixture</title><h1>Background success</h1>", { headers: { "content-type": "text/html" } }) })
+    const computer = yield* Computer.Service
+    try {
+      const page = yield* computer.perform("background-test", "request-1", { action: "open", url: `http://127.0.0.1:${server.port}/` }, new AbortController().signal, true)
+      expect(JSON.stringify(page)).toContain("Background success")
+      const mismatch = yield* computer.perform("background-test", "request-1", { action: "observe" }, new AbortController().signal, false).pipe(Effect.result)
+      expect(Result.isFailure(mismatch)).toBe(true)
+      yield* computer.stop("background-test")
+    } finally { server.stop(true) }
+  }))
+  it.instance("isolates Computer tools and asks for browser actions", () =>
+    Effect.gen(function* () {
+      const registry = yield* ToolRegistry.Service
+      const agents = yield* Agent.Service
+      const computer = yield* agents.get("computer")
+      expect(Permission.evaluate("browser", "*", computer.permission).action).toBe("ask")
+      expect(Permission.evaluate("bash", "*", computer.permission).action).toBe("deny")
+      expect(Permission.evaluate("desktop", "*", computer.permission).action).toBe(process.platform === "darwin" ? "ask" : "deny")
+      expect(Permission.evaluate("desktop_screenshot", "*", computer.permission).action).toBe(process.platform === "darwin" ? "ask" : "deny")
+      const input = { providerID: ProviderV2.ID.make("openrouter"), modelID: ModelV2.ID.make("test") }
+      const tools = yield* registry.tools({ ...input, agent: computer })
+      expect(tools.map((tool) => tool.id).sort()).toEqual(["browser", ...(process.platform === "darwin" ? ["desktop"] : []), "invalid", "question", "todowrite"])
+      const background = yield* agents.get("computer_background")
+      expect(Permission.evaluate("desktop", "*", background.permission).action).toBe("deny")
+      expect(Permission.evaluate("bash", "*", background.permission).action).toBe("deny")
+      const backgroundTools = yield* registry.tools({ ...input, agent: background })
+      expect(backgroundTools.map((tool) => tool.id).sort()).toEqual(["browser", "invalid", "question", "todowrite"])
+      const isolated = yield* agents.get("computer_background_mac")
+      const isolatedTools = yield* registry.tools({ ...input, agent: isolated })
+      expect(isolatedTools.map((tool) => tool.id).sort()).toEqual(["browser", ...(process.platform === "darwin" ? ["desktop"] : []), "invalid", "question", "todowrite"])
+      expect(Permission.evaluate("bash", "*", isolated.permission).action).toBe("deny")
+      const desktop = yield* agents.get("desktop")
+      expect(Permission.evaluate("desktop", "*", desktop.permission).action).toBe("ask")
+      expect(Permission.evaluate("desktop_screenshot", "*", desktop.permission).action).toBe("ask")
+      expect(Permission.evaluate("bash", "*", desktop.permission).action).toBe("deny")
+      const native = yield* registry.tools({ ...input, agent: desktop })
+      expect(native.map((tool) => tool.id).sort()).toEqual(["desktop", "invalid", "question", "todowrite"])
+      const build = yield* registry.tools({ ...input, agent: yield* agents.get("build") })
+      expect(build.some((tool) => tool.id === "browser")).toBe(false)
+      expect(build.some((tool) => tool.id === "desktop")).toBe(false)
+    }),
+  )
+
   it.instance("does not expose task_status", () =>
     Effect.gen(function* () {
       const registry = yield* ToolRegistry.Service

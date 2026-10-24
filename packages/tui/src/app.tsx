@@ -22,7 +22,6 @@ import {
   onCleanup,
   batch,
   Show,
-  on,
 } from "solid-js"
 import { TuiPathsProvider, TuiStartupProvider, TuiTerminalEnvironmentProvider, useTuiStartup } from "./context/runtime"
 import { DialogProvider, useDialog } from "./ui/dialog"
@@ -40,6 +39,12 @@ import { LocationProvider } from "./context/location"
 import { LocalProvider, useLocal } from "./context/local"
 import { PermissionProvider } from "./context/permission"
 import { DialogModel } from "./component/dialog-model"
+import { DialogLocal } from "./component/dialog-local"
+import { DialogCloud } from "./component/dialog-cloud"
+import { DialogComputer } from "./component/dialog-computer"
+import { DialogRemote } from "./component/dialog-remote"
+import { DialogAssist } from "./component/dialog-assist"
+import { DialogSetup } from "./component/dialog-setup"
 import { useConnected } from "./component/use-connected"
 import { DialogMcp } from "./component/dialog-mcp"
 import { DialogStatus } from "./component/dialog-status"
@@ -454,14 +459,14 @@ function App(props: { onSnapshot?: () => Promise<string[]>; pluginHost: TuiPlugi
     if (!terminalTitleEnabled() || Flag.OPENCODE_DISABLE_TERMINAL_TITLE) return
 
     if (route.data.type === "home") {
-      renderer.setTerminalTitle("OpenCode")
+      renderer.setTerminalTitle("OliveCode")
       return
     }
 
     if (route.data.type === "session") {
       const session = sync.session.get(route.data.sessionID)
       if (!session || isDefaultTitle(session.title)) {
-        renderer.setTerminalTitle("OpenCode")
+        renderer.setTerminalTitle("OliveCode")
         return
       }
 
@@ -536,17 +541,6 @@ function App(props: { onSnapshot?: () => Promise<string[]>; pluginHost: TuiPlugi
       }
     })
   })
-
-  createEffect(
-    on(
-      () => sync.status === "complete" && sync.data.provider.length === 0,
-      (isEmpty, wasEmpty) => {
-        // only trigger when we transition into an empty-provider state
-        if (!isEmpty || wasEmpty) return
-        dialog.replace(() => <DialogProviderList />)
-      },
-    ),
-  )
 
   const connected = useConnected()
   const currentWorktreeWorkspace = createMemo(() => {
@@ -637,6 +631,48 @@ function App(props: { onSnapshot?: () => Promise<string[]>; pluginHost: TuiPlugi
         run: () => {
           dialog.replace(() => <DialogModel />)
         },
+      },
+      {
+        name: "olivecode.start",
+        title: "Getting started with OliveCode",
+        category: "Help",
+        slashName: "start",
+        run: () => dialog.replace(() => <DialogSetup />),
+      },
+      {
+        name: "model.local",
+        title: "Local models and downloads",
+        category: "Agent",
+        slashName: "local",
+        run: () => dialog.replace(() => <DialogLocal />),
+      },
+      {
+        name: "model.cloud",
+        title: "Cloud models and availability",
+        category: "Agent",
+        slashName: "cloud",
+        run: () => dialog.replace(() => <DialogCloud />),
+      },
+      {
+        name: "olivecode.computer",
+        title: "Computer mode · browser and Mac apps",
+        category: "Agent",
+        slashName: "computer",
+        run: () => dialog.replace(() => <DialogComputer />),
+      },
+      {
+        name: "olivecode.remote",
+        title: "Remote · connect your phone with Telegram",
+        category: "Agent",
+        slashName: "remote",
+        run: () => dialog.replace(() => <DialogRemote />),
+      },
+      {
+        name: "olivecode.assist",
+        title: "Teamwork and follow-through",
+        category: "Agent",
+        slashName: "assist",
+        run: () => dialog.replace(() => <DialogAssist />),
       },
       {
         name: "model.cycle_recent",
@@ -737,7 +773,7 @@ function App(props: { onSnapshot?: () => Promise<string[]>; pluginHost: TuiPlugi
       },
       {
         name: "provider.connect",
-        title: "Connect provider",
+        title: "Connect free providers",
         suggested: !connected(),
         slashName: "connect",
         run: () => {
@@ -745,21 +781,6 @@ function App(props: { onSnapshot?: () => Promise<string[]>; pluginHost: TuiPlugi
         },
         category: "Provider",
       },
-      ...(sync.data.console_state.switchableOrgCount > 1
-        ? [
-            {
-              name: "console.org.switch",
-              title: "Switch org",
-              suggested: Boolean(sync.data.console_state.activeOrgName),
-              slashName: "org",
-              slashAliases: ["orgs", "switch-org"],
-              run: () => {
-                dialog.replace(() => <DialogConsoleOrg />)
-              },
-              category: "Provider",
-            },
-          ]
-        : []),
       {
         name: "opencode.status",
         title: "View status",
@@ -819,7 +840,7 @@ function App(props: { onSnapshot?: () => Promise<string[]>; pluginHost: TuiPlugi
         name: "docs.open",
         title: "Open docs",
         run: () => {
-          open("https://opencode.ai/docs").catch(() => {})
+          dialog.replace(() => <DialogSetup />)
           dialog.clear()
         },
         category: "System",
@@ -1070,7 +1091,7 @@ function App(props: { onSnapshot?: () => Promise<string[]>; pluginHost: TuiPlugi
     await DialogAlert.show(
       dialog,
       "Update Complete",
-      `Successfully updated to OpenCode v${result.data.version}. Please restart the application.`,
+      `Successfully updated to OliveCode v${result.data.version}. Please restart the application.`,
     )
 
     void exit()

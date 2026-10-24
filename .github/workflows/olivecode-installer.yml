@@ -1,0 +1,53 @@
+name: OliveCode installer compatibility
+
+on:
+  push:
+    branches: [macos-installer-check]
+  pull_request:
+    paths:
+      - distribution/install.sh
+      - distribution/test/install.test.ts
+      - distribution/test/macos-install.test.ts
+      - .github/workflows/olivecode-installer.yml
+
+permissions:
+  contents: read
+
+jobs:
+  installer:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-latest
+            package: Linux-x64
+          - runner: macos-15-intel
+            package: macOS-x64
+          - runner: macos-15
+            package: macOS-arm64
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.4.2"
+      - name: Exercise platform selection and unsupported macOS handling
+        working-directory: distribution
+        run: bun test test/install.test.ts test/macos-install.test.ts
+      - name: Install the existing public release with the changed installer
+        shell: bash
+        env:
+          PACKAGE: ${{ matrix.package }}
+        run: |
+          temporary=$(mktemp -d)
+          trap 'rm -rf "$temporary"' EXIT
+          archive="OliveCode-$PACKAGE.zip"
+          base=https://github.com/BenjaminZajko/opencodeFORK/releases/download/v0.1.0
+          curl -fL --retry 2 "$base/$archive" -o "$temporary/$archive"
+          curl -fL --retry 2 "$base/$archive.sha256" -o "$temporary/$archive.sha256"
+          OLIVECODE_INSTALL_HOME="$temporary/home" \
+          OLIVECODE_ARCHIVE_PATH="$temporary/$archive" \
+          OLIVECODE_SHA256_PATH="$temporary/$archive.sha256" \
+          sh distribution/install.sh
+          "$temporary/home/.local/bin/olivecode" --version
+          "$temporary/home/.local/bin/olivecode" --help

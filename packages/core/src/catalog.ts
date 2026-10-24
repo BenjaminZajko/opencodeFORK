@@ -1,3 +1,4 @@
+import { freeModel, freeProvider } from "./olivecode/models"
 export * as Catalog from "./catalog"
 
 import { makeLocationNode } from "./effect/app-node"
@@ -68,6 +69,11 @@ const layer = Layer.effect(
     const policy = yield* Policy.Service
     const integrations = yield* Integration.Service
 
+    const allowed = (model: ModelV2.Info) => freeModel(model.providerID, model.id, {
+      api: { id: model.api.id }, status: model.status,
+      cost: model.cost.length ? { input: Math.max(...model.cost.map((item) => item.input)), output: Math.max(...model.cost.map((item) => item.output)) } : undefined,
+    })
+    const allowedProvider = (id: string) => id === "ollama" || freeProvider(id)
     const available = (provider: ProviderV2.Info, integration: Integration.Info | undefined) => {
       if (provider.disabled) return false
       if (typeof provider.request.body.apiKey === "string") return true
@@ -174,11 +180,11 @@ const layer = Layer.effect(
 
       provider: {
         get: Effect.fn("CatalogV2.provider.get")(function* (providerID) {
-          return state.get().providers.get(providerID)?.provider
+          return allowedProvider(providerID) ? state.get().providers.get(providerID)?.provider : undefined
         }),
 
         all: Effect.fn("CatalogV2.provider.all")(function* () {
-          return Array.fromIterable(state.get().providers.values()).map((record) => record.provider)
+          return Array.fromIterable(state.get().providers.values()).map((record) => record.provider).filter((provider) => allowedProvider(provider.id))
         }),
 
         available: Effect.fn("CatalogV2.provider.available")(function* () {
@@ -194,7 +200,7 @@ const layer = Layer.effect(
           const record = state.get().providers.get(providerID)
           if (!record) return
           const model = record.models.get(modelID)
-          return model && projectModel(model, record.provider)
+          return model && allowed(model) ? projectModel(model, record.provider) : undefined
         }),
 
         all: Effect.fn("CatalogV2.model.all")(function* () {
@@ -203,6 +209,7 @@ const layer = Layer.effect(
             Array.flatMap((record) => {
               return Array.fromIterable(record.models.values()).map((model) => projectModel(model, record.provider))
             }),
+            Array.filter(allowed),
             Array.sortWith((item) => item.time.released, Order.flip(Order.Number)),
           )
         }),
@@ -241,15 +248,12 @@ const layer = Layer.effect(
             return
           }
 
-          if (providerID === ProviderV2.ID.opencode) {
-            const gpt5Nano = record.models.get(ModelV2.ID.make("gpt-5-nano"))
-            if (gpt5Nano?.enabled && gpt5Nano.status === "active") return projectModel(gpt5Nano, provider)
-          }
 
           const candidates = pipe(
             Array.fromIterable(record.models.values()),
             Array.filter(
               (model) =>
+                allowed(model) &&
                 model.providerID === providerID &&
                 model.enabled &&
                 model.status === "active" &&
@@ -262,7 +266,7 @@ const layer = Layer.effect(
               age: (Date.now() - model.time.released) / (1000 * 60 * 60 * 24 * 30),
               small: SMALL_MODEL_RE.test(`${model.id} ${model.family ?? ""} ${model.name}`.toLowerCase()),
             })),
-            Array.filter((item) => item.cost > 0 && item.age <= 18),
+            Array.filter((item) => item.age <= 18),
           )
 
           const pick = (items: typeof candidates) => {

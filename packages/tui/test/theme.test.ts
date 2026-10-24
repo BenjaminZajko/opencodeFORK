@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test"
 import { mkdir, writeFile } from "node:fs/promises"
 import path from "node:path"
-import type { TerminalColors } from "@opentui/core"
+import type { TerminalColors, RGBA } from "@opentui/core"
 import { DEFAULT_THEMES, addTheme, allThemes, hasTheme, resolveTheme, terminalMode } from "../src/theme"
 import { discoverThemes } from "../src/context/theme"
 import { tmpdir } from "./fixture/fixture"
@@ -79,3 +79,37 @@ test("custom theme precedence follows directory order", async () => {
 
   await expect(discoverThemes([global, project])).resolves.toEqual({ custom: { source: "project" } })
 })
+
+function luminance(color: RGBA) {
+  return [color.r, color.g, color.b]
+    .map((value) => (value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4))
+    .reduce((sum, value, index) => sum + value * [0.2126, 0.7152, 0.0722][index], 0)
+}
+
+function contrast(a: RGBA, b: RGBA) {
+  return (Math.max(luminance(a), luminance(b)) + 0.05) / (Math.min(luminance(a), luminance(b)) + 0.05)
+}
+
+for (const mode of ["dark", "light"] as const) {
+  test(`OliveCode ${mode} theme keeps text, code, status and selections legible`, () => {
+    const theme = resolveTheme(DEFAULT_THEMES.olivecode, mode)
+    for (const fg of [
+      "text",
+      "textMuted",
+      "primary",
+      "secondary",
+      "error",
+      "warning",
+      "success",
+      "info",
+      "syntaxKeyword",
+      "syntaxFunction",
+      "syntaxType",
+    ] as const)
+      for (const bg of ["background", "backgroundPanel", "backgroundElement"] as const)
+        expect(contrast(theme[fg], theme[bg]), `${fg} on ${bg}`).toBeGreaterThanOrEqual(4.5)
+    expect(contrast(theme.selectedListItemText, theme.primary)).toBeGreaterThanOrEqual(4.5)
+    expect(contrast(theme.diffAdded, theme.diffAddedBg)).toBeGreaterThanOrEqual(4.5)
+    expect(contrast(theme.diffRemoved, theme.diffRemovedBg)).toBeGreaterThanOrEqual(4.5)
+  })
+}

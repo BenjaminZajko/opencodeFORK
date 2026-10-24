@@ -182,6 +182,9 @@ function walk<Result>(
   const stack: AnyNode[] = []
 
   const recur = (node: AnyNode): Result => {
+    if (!node) {
+      throw new Error(`Uninitialized layer dependency: ${stack.map((item) => item.name).join(" -> ")}`)
+    }
     const target = options.resolve?.(node) ?? node
     const cached = cache.get(target)
     if (cached !== undefined || cache.has(target)) return cached!

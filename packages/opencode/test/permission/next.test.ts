@@ -74,6 +74,66 @@ const list = () =>
     return yield* permission.list()
   })
 
+it.instance("approval receipts distinguish terminal interaction from automatic grants", () => Effect.gen(function* () {
+  const permission = yield* Permission.Service
+  const request = { id: PermissionV1.ID.make("per_desktop_receipt"), sessionID: SessionID.make("session_desktop_receipt"),
+    permission: "desktop", patterns: ["session_desktop_receipt:click:6"], always: ["session_desktop_receipt:*"], metadata: {}, ruleset: [],
+  }
+  const waiting = yield* permission.askWithReceipt!(request).pipe(Effect.forkScoped)
+  yield* waitForPending(1)
+  yield* permission.reply({ requestID: request.id, reply: "always" })
+  expect(yield* Fiber.join(waiting)).toBe(true)
+  expect(yield* permission.askWithReceipt!({ ...request, patterns: ["session_desktop_receipt:type:1"] })).toBe(false)
+}))
+
+it.instance("browser automatic approval stays in its chat and excludes screenshots", () =>
+  Effect.gen(function* () {
+    const first = yield* ask({
+      id: PermissionV1.ID.make("per_browser_first"), sessionID: SessionID.make("session_browser_a"),
+      permission: "browser", patterns: ["session_browser_a:open:https://example.com"],
+      always: ["session_browser_a:*"], metadata: {}, ruleset: [],
+    }).pipe(Effect.forkScoped)
+    yield* waitForPending(1)
+    yield* reply({ requestID: PermissionV1.ID.make("per_browser_first"), reply: "always" })
+    yield* Fiber.join(first)
+    yield* ask({ sessionID: SessionID.make("session_browser_a"), permission: "browser",
+      patterns: ["session_browser_a:click:3"], always: ["session_browser_a:*"], metadata: {}, ruleset: [] }).pipe(Effect.timeout("1 second"))
+    const other = yield* ask({ id: PermissionV1.ID.make("per_browser_other"), sessionID: SessionID.make("session_browser_b"),
+      permission: "browser", patterns: ["session_browser_b:click:3"], always: ["session_browser_b:*"], metadata: {}, ruleset: [] }).pipe(Effect.forkScoped)
+    const image = yield* ask({ id: PermissionV1.ID.make("per_browser_image"), sessionID: SessionID.make("session_browser_a"),
+      permission: "browser_screenshot", patterns: ["https://example.com"], always: [], metadata: {}, ruleset: [] }).pipe(Effect.forkScoped)
+    const pending = yield* waitForPending(2)
+    expect(pending.map((request) => request.permission).sort()).toEqual(["browser", "browser_screenshot"])
+    yield* rejectAll()
+    yield* Fiber.await(other)
+    yield* Fiber.await(image)
+  }),
+)
+
+it.instance("desktop automatic approval stays in its chat and excludes screenshots", () =>
+  Effect.gen(function* () {
+    const first = yield* ask({
+      id: PermissionV1.ID.make("per_desktop_first"), sessionID: SessionID.make("session_desktop_a"),
+      permission: "desktop", patterns: ["session_desktop_a:open:https://example.com"],
+      always: ["session_desktop_a:*"], metadata: {}, ruleset: [],
+    }).pipe(Effect.forkScoped)
+    yield* waitForPending(1)
+    yield* reply({ requestID: PermissionV1.ID.make("per_desktop_first"), reply: "always" })
+    yield* Fiber.join(first)
+    yield* ask({ sessionID: SessionID.make("session_desktop_a"), permission: "desktop",
+      patterns: ["session_desktop_a:click:3"], always: ["session_desktop_a:*"], metadata: {}, ruleset: [] }).pipe(Effect.timeout("1 second"))
+    const other = yield* ask({ id: PermissionV1.ID.make("per_desktop_other"), sessionID: SessionID.make("session_desktop_b"),
+      permission: "desktop", patterns: ["session_desktop_b:click:3"], always: ["session_desktop_b:*"], metadata: {}, ruleset: [] }).pipe(Effect.forkScoped)
+    const image = yield* ask({ id: PermissionV1.ID.make("per_desktop_image"), sessionID: SessionID.make("session_desktop_a"),
+      permission: "desktop_screenshot", patterns: ["https://example.com"], always: [], metadata: {}, ruleset: [] }).pipe(Effect.forkScoped)
+    const pending = yield* waitForPending(2)
+    expect(pending.map((request) => request.permission).sort()).toEqual(["desktop", "desktop_screenshot"])
+    yield* rejectAll()
+    yield* Fiber.await(other)
+    yield* Fiber.await(image)
+  }),
+)
+
 // fromConfig tests
 
 test("fromConfig - string value becomes wildcard rule", () => {

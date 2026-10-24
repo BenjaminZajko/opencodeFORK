@@ -16,18 +16,21 @@ const generated = await import("./generate.ts")
 import { Script } from "@opencode-ai/script"
 import pkg from "../package.json"
 
+// A semver release must never opt this fork back into upstream updates.
+const channel = Script.channel.startsWith("olivecode") ? Script.channel : "olivecode"
 const singleFlag = process.argv.includes("--single")
 const baselineFlag = process.argv.includes("--baseline")
 const skipInstall = process.argv.includes("--skip-install")
 const sourcemapsFlag = process.argv.includes("--sourcemaps")
 const plugin = createSolidTransformPlugin()
 const skipEmbedWebUi = process.argv.includes("--skip-embed-web-ui")
+const requestedTarget = process.argv.find((arg) => arg.startsWith("--target="))?.slice("--target=".length)
 
 const createEmbeddedWebUIBundle = async () => {
   console.log(`Building Web UI to embed in the binary`)
   const appDir = path.join(import.meta.dirname, "../../app")
   const dist = path.join(appDir, "dist")
-  await $`OPENCODE_CHANNEL=${Script.channel} bun run --cwd ${appDir} build`
+  await $`OPENCODE_CHANNEL=${channel} bun run --cwd ${appDir} build`
   const files = (await Array.fromAsync(new Bun.Glob("**/*").scan({ cwd: dist })))
     .map((file) => file.replaceAll("\\", "/"))
     .filter((file) => !file.endsWith(".map"))
@@ -113,7 +116,9 @@ const allTargets: {
   },
 ]
 
-const targets = singleFlag
+const targets = requestedTarget
+  ? allTargets.filter((item) => [item.os === "win32" ? "windows" : item.os, item.arch, item.avx2 === false ? "baseline" : undefined, item.abi].filter(Boolean).join("-") === requestedTarget)
+  : singleFlag
   ? allTargets.filter((item) => {
       if (item.os !== process.platform || item.arch !== process.arch) {
         return false
@@ -134,7 +139,9 @@ const targets = singleFlag
     })
   : allTargets
 
-await $`rm -rf dist`
+if (targets.length === 0) throw new Error(`Unknown build target: ${requestedTarget}`)
+
+if (!requestedTarget) await $`rm -rf dist`
 
 const binaries: Record<string, string> = {}
 if (!skipInstall) {
@@ -160,7 +167,21 @@ for (const item of targets) {
   const treeSitterWorkerPath = "opentui-tree-sitter-worker.js"
   const bunfsRoot = item.os === "win32" ? "B:/~BUN/root/" : "/$bunfs/root/"
 
-  await Bun.build({
+  const desktopHelper = item.os === "darwin" && process.platform === "darwin" ? await (async () => {
+    const file = `dist/${name}/desktop-helper`
+    await $`swiftc -module-cache-path /tmp/olivecode-swift-cache -O -parse-as-library -target ${item.arch === "arm64" ? "arm64" : "x86_64"}-apple-macosx14.0 src/computer/native/desktop.swift -o ${file}`
+    await $`codesign --force --sign - --identifier com.olivecode.computer ${file}`
+    return Buffer.from(await Bun.file(file).arrayBuffer()).toString("base64")
+  })() : ""
+
+  const vmManager = item.os === "darwin" && item.arch === "arm64" && process.platform === "darwin" ? await (async () => {
+    const file = `dist/${name}/background-vm-helper`
+    await $`swiftc -module-cache-path /tmp/olivecode-swift-cache -O -parse-as-library -target arm64-apple-macosx14.0 src/computer/native/background-vm.swift -o ${file}`
+    await $`codesign --force --sign - --identifier com.olivecode.background-mac --entitlements src/computer/native/background-vm.entitlements ${file}`
+    return Buffer.from(await Bun.file(file).arrayBuffer()).toString("base64")
+  })() : ""
+
+  const build = await Bun.build({
     conditions: ["bun", "node"],
     tsconfig: "./tsconfig.json",
     plugins: [plugin],
@@ -190,20 +211,23 @@ for (const item of targets) {
       ...(embeddedFileMap ? ["opencode-web-ui.gen.ts"] : []),
     ],
     define: {
+      OLIVECODE_DESKTOP_HELPER: JSON.stringify(desktopHelper),
+      OLIVECODE_VM_MANAGER: JSON.stringify(vmManager),
       FFF_LIBC: JSON.stringify(item.abi === "musl" ? "musl" : "gnu"),
       OPENCODE_VERSION: `'${Script.version}'`,
       OPENCODE_MODELS_DEV: generated.modelsData,
       OTUI_TREE_SITTER_WORKER_PATH: bunfsRoot + treeSitterWorkerPath,
       OPENCODE_WORKER_PATH: workerPath,
-      OPENCODE_CHANNEL: `'${Script.channel}'`,
+      OPENCODE_CHANNEL: JSON.stringify(channel),
       OPENCODE_LIBC: item.os === "linux" ? `'${item.abi ?? "glibc"}'` : "",
       ...(item.os === "linux" ? { "process.env.OPENTUI_LIBC": JSON.stringify(item.abi ?? "glibc") } : {}),
     },
   })
+  if (!build.success) throw new AggregateError(build.logs, `Could not build ${name}`)
 
   // Smoke test: only run if binary is for current platform
   if (item.os === process.platform && item.arch === process.arch && !item.abi) {
-    const binaryPath = `dist/${name}/bin/opencode`
+    const binaryPath = `dist/${name}/bin/opencode${item.os === "win32" ? ".exe" : ""}`
     console.log(`Running smoke test: ${binaryPath} --version`)
     try {
       const versionOutput = await $`${binaryPath} --version`.text()

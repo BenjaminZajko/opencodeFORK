@@ -1,0 +1,198 @@
+name: OliveCode preview packages
+
+on:
+  push:
+    branches: ['codex/release-*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version shared by all packages (semver)'
+        required: true
+        default: '0.1.0-preview.1'
+      publish:
+        description: 'Publish verified artifacts as a GitHub release'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.4.2"
+      - run: bun install --frozen-lockfile
+      - run: bun typecheck
+        working-directory: packages/opencode
+      - run: bun typecheck
+        working-directory: packages/tui
+      - run: bun typecheck
+        working-directory: packages/core
+      - run: bun test --timeout 30000 --only-failures
+        working-directory: packages/tui
+      - run: bun test test/olivecode --only-failures
+        working-directory: packages/core
+      - run: bun test test --only-failures
+        working-directory: distribution
+      - run: bun install --cwd site --frozen-lockfile
+      - run: bun test ./install.test.ts ./launch.test.ts
+        working-directory: site
+      - name: Check OliveCode features
+        working-directory: packages/opencode
+        run: bun test test/onboarding test/computer test/remote test/provider/free-models.test.ts test/provider/cooldown.test.ts test/provider/fallback.test.ts test/auth/migrate.test.ts test/plugin/openrouter.test.ts test/plugin/openrouter-callback.test.ts test/plugin/nvidia.test.ts test/session/prompt.test.ts test/session/processor-effect.test.ts test/session/message-v2.test.ts test/session/retry.test.ts test/session/ollama-tool-repair.test.ts test/session/repetition.test.ts test/tool/desktop.test.ts test/tool/registry.test.ts --timeout 30000 --only-failures
+  package:
+    needs: quality
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: windows-latest
+            target: windows-x64-baseline
+          - runner: windows-11-arm
+            target: windows-arm64
+          - runner: macos-15-intel
+            target: darwin-x64-baseline
+          - runner: macos-15
+            target: darwin-arm64
+          - runner: ubuntu-latest
+            target: linux-x64-baseline
+          - runner: ubuntu-24.04-arm
+            target: linux-arm64
+          - runner: ubuntu-latest
+            target: linux-x64-baseline-musl
+          - runner: ubuntu-24.04-arm
+            target: linux-arm64-musl
+    runs-on: ${{ matrix.runner }}
+    env:
+      OPENCODE_VERSION: ${{ inputs.version || '0.1.0' }}
+      OPENCODE_CHANNEL: olivecode
+      MODELS_DEV_API_JSON: ${{ github.workspace }}/packages/opencode/test/tool/fixtures/models-api.json
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.4.2"
+      - run: bun install --frozen-lockfile
+      - name: Validate release version
+        shell: bash
+        env:
+          RELEASE_VERSION: ${{ inputs.version || '0.1.0' }}
+        run: |
+          [[ "$RELEASE_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+([-+][A-Za-z0-9.-]+)?$ ]] || exit 1
+      - name: Build native executable
+        run: bun run --cwd packages/opencode script/build.ts --target=${{ matrix.target }} --skip-install --skip-embed-web-ui
+      - name: Package preview
+        run: bun distribution/package.ts ${{ matrix.target }}
+      - name: Check release identity and updater isolation
+        if: ${{ !contains(matrix.target, 'musl') }}
+        shell: bash
+        run: |
+          executable=packages/opencode/dist/opencode-${{ matrix.target }}/bin/opencode
+          if [[ "$RUNNER_OS" == Windows ]]; then executable="$executable.exe"; fi
+          bun distribution/smoke-release.ts "$executable" "$OPENCODE_VERSION"
+      - name: Exercise compiled chat, tools and Assist
+        if: ${{ !contains(matrix.target, 'musl') }}
+        shell: bash
+        run: |
+          executable=packages/opencode/dist/opencode-${{ matrix.target }}/bin/opencode
+          if [[ "$RUNNER_OS" == Windows ]]; then executable="$executable.exe"; fi
+          python3 script/smoke-olivecode.py "$executable"
+      - name: Test Windows installer
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $label = if ('${{ matrix.target }}' -eq 'windows-arm64') { 'Windows-arm64' } else { 'Windows-x64' }
+          $env:LOCALAPPDATA = Join-Path $env:RUNNER_TEMP 'OliveCodeInstallTest'
+          $env:OLIVECODE_ARCHIVE_PATH = Join-Path $env:GITHUB_WORKSPACE "distribution/releases/OliveCode-$label.zip"
+          $env:OLIVECODE_SHA256_PATH = "$env:OLIVECODE_ARCHIVE_PATH.sha256"
+          & ./distribution/install.ps1
+          $project = Join-Path $env:RUNNER_TEMP 'Project with spaces'
+          New-Item -ItemType Directory -Force $project | Out-Null
+          Set-Location $project
+          olivecode --version
+          olivecode --help
+          if ($LASTEXITCODE -ne 0) { throw 'Installed OliveCode did not start' }
+      - name: Test macOS installer
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          label=${{ matrix.target }}
+          if [[ "$label" == "darwin-arm64" ]]; then label=macOS-arm64; else label=macOS-x64; fi
+          OLIVECODE_INSTALL_HOME="$RUNNER_TEMP/OliveCodeInstallTest" \
+          OLIVECODE_ARCHIVE_PATH="$GITHUB_WORKSPACE/distribution/releases/OliveCode-$label.zip" \
+          OLIVECODE_SHA256_PATH="$GITHUB_WORKSPACE/distribution/releases/OliveCode-$label.zip.sha256" \
+          sh distribution/install.sh
+          "$RUNNER_TEMP/OliveCodeInstallTest/.local/bin/olivecode" --version
+      - name: Test Linux installer
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          label=${{ matrix.target }}
+          label=${label/linux-/Linux-}
+          label=${label/-baseline/}
+          if [[ "$label" == *musl ]]; then
+            docker run --rm -v "$GITHUB_WORKSPACE:/src:ro" alpine:3.22 sh -c "apk add --no-cache unzip libstdc++ libgcc; OLIVECODE_INSTALL_HOME=/tmp/user OLIVECODE_ARCHIVE_PATH=/src/distribution/releases/OliveCode-$label.zip OLIVECODE_SHA256_PATH=/src/distribution/releases/OliveCode-$label.zip.sha256 sh /src/distribution/install.sh; /tmp/user/.local/bin/olivecode --version; /tmp/user/.local/bin/olivecode --help"
+          else
+            OLIVECODE_INSTALL_HOME="$RUNNER_TEMP/OliveCodeInstallTest" OLIVECODE_ARCHIVE_PATH="$GITHUB_WORKSPACE/distribution/releases/OliveCode-$label.zip" OLIVECODE_SHA256_PATH="$GITHUB_WORKSPACE/distribution/releases/OliveCode-$label.zip.sha256" sh distribution/install.sh
+            "$RUNNER_TEMP/OliveCodeInstallTest/.local/bin/olivecode" --version
+            "$RUNNER_TEMP/OliveCodeInstallTest/.local/bin/olivecode" --help
+          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: OliveCode-${{ matrix.target }}
+          path: |
+            distribution/releases/*.zip
+            distribution/releases/*.sha256
+          if-no-files-found: error
+
+  verification:
+    needs: package
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.4.2"
+      - name: Record successful native installer verification
+        env:
+          RELEASE_VERSION: ${{ inputs.version || '0.1.0' }}
+        run: |
+          bun -e 'await Bun.write("release-verification.json", JSON.stringify({repository:"BenjaminZajko/opencodeFORK",tag:"v"+process.env.RELEASE_VERSION,commit:process.env.GITHUB_SHA,runID:Number(process.env.GITHUB_RUN_ID),nativeTestsPassed:true,targets:["darwin-arm64","darwin-x64-baseline","windows-x64-baseline","windows-arm64","linux-x64-baseline","linux-arm64","linux-x64-baseline-musl","linux-arm64-musl"]},null,2))'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: OliveCode-verification
+          path: release-verification.json
+          if-no-files-found: error
+
+  release:
+    if: inputs.publish
+    needs: [package, verification]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.4.2"
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: OliveCode-*
+          merge-multiple: true
+          path: release-assets
+      - name: Record successful native installer verification
+        env:
+          RELEASE_VERSION: ${{ inputs.version }}
+        run: |
+          bun -e 'await Bun.write("release-assets/release-verification.json", JSON.stringify({repository:"BenjaminZajko/opencodeFORK",tag:"v"+process.env.RELEASE_VERSION,commit:process.env.GITHUB_SHA,runID:Number(process.env.GITHUB_RUN_ID),nativeTestsPassed:true,targets:["darwin-arm64","darwin-x64-baseline","windows-x64-baseline","windows-arm64","linux-x64-baseline","linux-arm64","linux-x64-baseline-musl","linux-arm64-musl"]},null,2))'
+      - name: Publish only after all native installer checks pass
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_VERSION: ${{ inputs.version }}
+        run: |
+          cp distribution/install.sh distribution/install.ps1 release-assets/
+          gh release create "v$RELEASE_VERSION" release-assets/* --target "$GITHUB_SHA" --latest --title "OliveCode $RELEASE_VERSION" --notes "OliveCode terminal preview for macOS, Windows and Linux. Native Mac app control requires macOS. See the guide for setup and preview limitations."

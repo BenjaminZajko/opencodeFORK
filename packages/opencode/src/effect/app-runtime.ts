@@ -15,6 +15,7 @@ import { Plugin } from "@/plugin"
 import { ModelsDev } from "@opencode-ai/core/models-dev"
 import { Provider } from "@/provider/provider"
 import { ProviderAuth } from "@/provider/auth"
+import { ProviderCooldown } from "@/provider/cooldown"
 import { Agent } from "@/agent/agent"
 import { Skill } from "@/skill"
 import { Discovery } from "@/skill/discovery"
@@ -70,6 +71,7 @@ export const AppLayer = AppNodeBuilderV1.build(
     ModelsDev.node,
     Provider.node,
     ProviderAuth.node,
+    ProviderCooldown.node,
     Agent.node,
     Skill.node,
     Discovery.node,

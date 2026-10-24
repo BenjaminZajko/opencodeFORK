@@ -1,0 +1,37 @@
+{
+  "note": "Apply in Cloudflare zone Redirect Rules only after checking DNS and certificate state; these are not Pages _redirects rules.",
+  "zones": {
+    "olivecode.dev": [
+      {
+        "description": "OliveCode canonical HTTPS and www",
+        "expression": "(http.host eq \"www.olivecode.dev\") or (http.host eq \"olivecode.dev\" and not ssl)",
+        "action": "redirect",
+        "action_parameters": {
+          "from_value": {
+            "status_code": 301,
+            "target_url": {
+              "expression": "concat(\"https://olivecode.dev\", http.request.uri.path)"
+            },
+            "preserve_query_string": true
+          }
+        }
+      }
+    ],
+    "olivecode.online": [
+      {
+        "description": "OliveCode secondary domain to primary",
+        "expression": "http.host in {\"olivecode.online\" \"www.olivecode.online\"}",
+        "action": "redirect",
+        "action_parameters": {
+          "from_value": {
+            "status_code": 301,
+            "target_url": {
+              "expression": "concat(\"https://olivecode.dev\", http.request.uri.path)"
+            },
+            "preserve_query_string": true
+          }
+        }
+      }
+    ]
+  }
+}

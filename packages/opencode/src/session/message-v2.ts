@@ -1,3 +1,5 @@
+import { historicalObservation } from "@/computer/history"
+import { repeatingResponse } from "./repetition"
 import { SessionID, MessageID } from "./schema"
 import { SessionV1 } from "@opencode-ai/core/v1/session"
 import { ProviderV2 } from "@opencode-ai/core/provider"
@@ -124,7 +126,9 @@ function hydrate(db: Database.Interface["db"], rows: (typeof MessageTable.$infer
 
 function providerMeta(metadata: Record<string, any> | undefined) {
   if (!metadata) return undefined
-  const { providerExecuted: _, ...rest } = metadata
+  // Local UI/recovery flags are not provider-option namespaces. Replaying
+  // booleans here would fail the SDK's ModelMessage schema on the next turn.
+  const rest = Object.fromEntries(Object.entries(metadata).filter(([key]) => key !== "providerExecuted" && !key.startsWith("olivecode")))
   return Object.keys(rest).length > 0 ? rest : undefined
 }
 
@@ -135,6 +139,14 @@ export const toModelMessagesEffect = Effect.fnUntraced(function* (
 ) {
   const result: UIMessage[] = []
   const toolNames = new Set<string>()
+  const currentRequest = input.findLastIndex((msg) => msg.info.role === "user" && msg.parts.some((part) => part.type === "text" && !part.synthetic && !part.ignored))
+  const latestComputer = new Map<string, Part>()
+  for (const msg of input.slice(currentRequest + 1)) for (const part of msg.parts) {
+    if (part.type !== "tool" || !["desktop", "browser"].includes(part.tool) || part.state.status !== "completed" || part.metadata?.olivecodeCoordination) continue
+    // Status/search receipts must not replace the most recent actionable view.
+    if (["status", "find_app", "setup", "close"].includes(String(part.state.input.action))) continue
+    latestComputer.set(part.tool, part)
+  }
   // Track media from tool results that need to be injected as user messages
   // for providers that don't support that media type in tool results.
   //
@@ -276,11 +288,13 @@ export const toModelMessagesEffect = Effect.fnUntraced(function* (
       })
       for (const part of msg.parts) {
         if (part.type === "text") {
-          const text = part.text === "" && hasSignedReasoning ? " " : part.text
+          const text = msg.info.agent === "desktop" && repeatingResponse(part.text)
+            ? "[Earlier repetitive model output omitted. This text performed no actions. Use actual desktop tool observations to establish progress.]"
+            : part.text === "" && hasSignedReasoning ? " " : part.text
           assistantMessage.parts.push({
             type: "text",
             text,
-            ...(differentModel ? {} : { providerMetadata: part.metadata }),
+            ...(differentModel ? {} : { providerMetadata: providerMeta(part.metadata) }),
           })
         }
         if (part.type === "step-start")
@@ -288,12 +302,16 @@ export const toModelMessagesEffect = Effect.fnUntraced(function* (
             type: "step-start",
           })
         if (part.type === "tool") {
+          // Coordination traces are UI records, not calls made by the lead model.
+          if (part.metadata?.olivecodeCoordination) continue
           toolNames.add(part.tool)
           if (part.state.status === "completed") {
+            const historicalComputer = ["desktop", "browser"].includes(part.tool) && latestComputer.get(part.tool) !== part
+            const replayOutput = historicalComputer ? historicalObservation(part.state.output) : part.state.output
             const outputText = part.state.time.compacted
               ? "[Old tool result content cleared]"
-              : truncateToolOutput(part.state.output, options?.toolOutputMaxChars)
-            const attachments = part.state.time.compacted || options?.stripMedia ? [] : (part.state.attachments ?? [])
+              : truncateToolOutput(replayOutput, options?.toolOutputMaxChars)
+            const attachments = part.state.time.compacted || options?.stripMedia || historicalComputer ? [] : (part.state.attachments ?? [])
 
             // For providers that don't support media in tool results, extract media files
             // (images, PDFs) to be sent as a separate user message
@@ -371,7 +389,7 @@ export const toModelMessagesEffect = Effect.fnUntraced(function* (
           assistantMessage.parts.push({
             type: "reasoning",
             text: part.text,
-            providerMetadata: part.metadata,
+            providerMetadata: providerMeta(part.metadata),
           })
         }
       }

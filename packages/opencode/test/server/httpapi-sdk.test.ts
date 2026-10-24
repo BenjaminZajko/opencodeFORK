@@ -30,6 +30,7 @@ import { ProviderV2 } from "@opencode-ai/core/provider"
 import { ModelV2 } from "@opencode-ai/core/model"
 import { Database } from "@opencode-ai/core/database/database"
 import { httpApiLayer } from "./httpapi-layer"
+import { sdkRemoteDriver } from "../../src/remote/driver"
 
 const noopBootstrapLayer = Layer.succeed(InstanceBootstrap.Service, InstanceBootstrap.Service.of({ run: Effect.void }))
 const appLayer = AppNodeBuilder.build(
@@ -803,6 +804,86 @@ describe("HttpApi SDK", () => {
         }
       }),
     ),
+  )
+
+  httpapi(
+    "Telegram driver runs the real agent, relays edit approval, and returns the persisted final response",
+    Effect.gen(function* () {
+      const llm = yield* TestLLMServer
+      const fixture = testProviderConfig(llm.url)
+      return yield* withProject("default", { config: { ...fixture, provider: { ollama: { ...fixture.provider.test, id: "ollama" } }, collaboration: { teamwork: false, followThrough: false } } }, ({ sdk, directory }) =>
+        Effect.gen(function* () {
+          const file = path.join(directory, "remote-hello.txt")
+          yield* llm.tool("write", { filePath: file, content: "Hello from Telegram\n" })
+          yield* llm.text("Created remote-hello.txt and verified the requested content.")
+          const task = yield* Effect.promise(() => sdkRemoteDriver(sdk, "ollama/test-model").create("build"))
+          const approvals: string[] = []
+          const result = yield* Effect.promise(() => task.run("Create remote-hello.txt containing Hello from Telegram.", new AbortController().signal, {
+            progress: async () => {}, photo: async () => {},
+            permission: async (request) => { approvals.push(request.permission); await task.approve(request.id, true) },
+          })).pipe(Effect.timeout("15 seconds"))
+          expect(result).toContain("Created remote-hello.txt")
+          expect(JSON.stringify(yield* llm.inputs)).toContain("Coding mode has file and coding tools but NO desktop or browser control")
+          expect(approvals).toContain("edit")
+          expect(yield* Effect.promise(() => Bun.file(file).text())).toBe("Hello from Telegram\n")
+        }),
+      )
+    }).pipe(Effect.provide(TestLLMServer.layer)),
+  )
+
+  httpapi(
+    "Telegram driver exposes browser and app tools only in the selected computer mode",
+    Effect.gen(function* () {
+      const llm = yield* TestLLMServer
+      const fixture = testProviderConfig(llm.url)
+      return yield* withProject("default", { config: { ...fixture, provider: { ollama: { ...fixture.provider.test, id: "ollama" } }, collaboration: { teamwork: false, followThrough: false } } }, ({ sdk }) =>
+        Effect.gen(function* () {
+          for (const agent of ["build", "computer"]) {
+            yield* llm.text("Mode checked.")
+            const task = yield* Effect.promise(() => sdkRemoteDriver(sdk, "ollama/test-model", ["coding", "visible"]).create(agent))
+            yield* Effect.promise(() => task.run("Open Google Chrome for Testing and search banana.", new AbortController().signal, {
+              progress: async () => {}, photo: async () => {}, permission: async (request) => { await task.approve(request.id, false) },
+            })).pipe(Effect.timeout("15 seconds"))
+            const inputs = yield* llm.inputs
+            const tools = inputs.at(-1)?.tools as { function?: { name?: string } }[] | undefined
+            const names = tools?.map((tool) => tool.function?.name) ?? []
+            expect(names.includes("browser")).toBe(agent === "computer")
+            if (process.platform === "darwin") expect(names.includes("desktop")).toBe(agent === "computer")
+            expect(names.includes("bash")).toBe(agent === "build")
+            expect(JSON.stringify(inputs.at(-1))).toContain(agent === "computer" ? "For an unknown app such as Google Chrome for Testing" : "do not search for app executables with shell commands")
+          }
+        }),
+      )
+    }).pipe(Effect.provide(TestLLMServer.layer)),
+  )
+
+  httpapi(
+    "Telegram driver Stop cancels an agent waiting for approval without editing the project",
+    Effect.gen(function* () {
+      const llm = yield* TestLLMServer
+      const fixture = testProviderConfig(llm.url)
+      return yield* withProject("default", { config: { ...fixture, provider: { ollama: { ...fixture.provider.test, id: "ollama" } }, collaboration: { teamwork: false, followThrough: false } } }, ({ sdk, directory }) =>
+        Effect.gen(function* () {
+          const file = path.join(directory, "must-not-exist.txt")
+          yield* llm.tool("write", { filePath: file, content: "No approval was granted" })
+          const task = yield* Effect.promise(() => sdkRemoteDriver(sdk, "ollama/test-model").create("build"))
+          yield* Effect.promise(async () => {
+            const abort = new AbortController()
+            let requested!: () => void
+            const approval = new Promise<void>((resolve) => { requested = resolve })
+            const running = task.run("Create must-not-exist.txt", abort.signal, {
+              progress: async () => {}, photo: async () => {}, permission: async () => { requested() },
+            }).then(() => false, () => true)
+            await approval
+            abort.abort()
+            await task.stop()
+            expect(await running).toBe(true)
+            expect(await Bun.file(file).exists()).toBe(false)
+            expect((await sdk.permission.list()).data).toEqual([])
+          }).pipe(Effect.timeout("15 seconds"))
+        }),
+      )
+    }).pipe(Effect.provide(TestLLMServer.layer)),
   )
 
   httpapi(

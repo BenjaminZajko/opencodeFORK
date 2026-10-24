@@ -25,6 +25,8 @@ export interface DialogSelectProps<T> {
   titleView?: JSX.Element
   placeholder?: string
   footer?: JSX.Element
+  showOverflowCue?: boolean
+  detailIndent?: number
   emptyView?: JSX.Element
   options: DialogSelectOption<T>[]
   flat?: boolean
@@ -697,7 +699,7 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
                           </box>
                           <For each={option.details}>
                             {(detail) => (
-                              <box paddingLeft={3} paddingRight={3}>
+                              <box paddingLeft={props.detailIndent ?? 3} paddingRight={3}>
                                 <text fg={theme.textMuted} wrapMode="none">
                                   {Locale.truncateMiddle(detail, Math.max(1, Math.min(76, dimensions().width - 12)))}
                                 </text>
@@ -714,6 +716,11 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
           </scrollbox>
         </Show>
       </box>
+      <Show when={props.showOverflowCue && rows() > height()}>
+        <box paddingRight={4} alignItems="flex-end" flexShrink={0}>
+          <text fg={theme.accent}>↓</text>
+        </box>
+      </Show>
       <Show when={props.footer || visibleActions().length} fallback={<box flexShrink={0} />}>
         <box paddingRight={2} paddingLeft={4} flexDirection="row" justifyContent="space-between" flexShrink={0}>
           <box flexDirection="row" gap={2}>

@@ -78,7 +78,7 @@ export const Definitions = {
   theme_list: keybind("<leader>t", "List available themes"),
   theme_switch_mode: keybind("none", "Switch between light and dark theme mode"),
   theme_mode_lock: keybind("none", "Lock or unlock theme mode"),
-  sidebar_toggle: keybind("<leader>b", "Toggle sidebar"),
+  sidebar_toggle: keybind("<leader>b", "Toggle session details"),
   scrollbar_toggle: keybind("none", "Toggle session scrollbar"),
   status_view: keybind("<leader>s", "View status"),
   debug_view: keybind("none", "View debug info"),

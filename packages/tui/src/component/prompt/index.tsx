@@ -44,6 +44,8 @@ import { formatDuration } from "../../util/format"
 import { createColors, createFrames } from "../../ui/spinner"
 import { useDialog } from "../../ui/dialog"
 import { DialogProvider as DialogProviderConnect } from "../dialog-provider"
+import { ModelSourceControls } from "../model-source-controls"
+import { DialogSetup } from "../dialog-setup"
 import { DialogAlert } from "../../ui/dialog-alert"
 import { useToast } from "../../ui/toast"
 import { useKV } from "../../context/kv"
@@ -220,7 +222,7 @@ export function Prompt(props: PromptProps) {
       duration: 3000,
     })
     if (sync.data.provider.length === 0) {
-      dialog.replace(() => <DialogProviderConnect />)
+      dialog.replace(() => <DialogSetup />)
     }
   }
 
@@ -272,11 +274,9 @@ export function Prompt(props: PromptProps) {
       last.tokens.input + last.tokens.output + last.tokens.reasoning + last.tokens.cache.read + last.tokens.cache.write
     if (tokens <= 0) return
 
-    const model = sync.data.provider.find((item) => item.id === last.providerID)?.models[last.modelID]
-    const pct = model?.limit.context ? `${Math.round((tokens / model.limit.context) * 100)}%` : undefined
     const cost = session?.cost ?? 0
     return {
-      context: pct ? `${Locale.number(tokens)} (${pct})` : Locale.number(tokens),
+      context: Locale.number(tokens),
       cost: cost > 0 ? money.format(cost) : undefined,
     }
   })
@@ -1316,7 +1316,9 @@ export function Prompt(props: PromptProps) {
       return `Run a command… "${example}"`
     }
     if (!list().length) return undefined
-    return `Ask anything… "${list()[store.placeholder % list().length]}"`
+    return dimensions().width < 90
+      ? "Describe what you want to build or fix…"
+      : "Describe what you want to build or fix, OliveCode works with your project files..."
   })
 
   const spinnerDef = createMemo(() => {
@@ -1350,19 +1352,18 @@ export function Prompt(props: PromptProps) {
       <box ref={(r: BoxRenderable) => (anchor = r)} visible={props.visible !== false} width="100%">
         <box
           width="100%"
-          border={["left"]}
+          border
+          borderStyle="rounded"
           borderColor={borderHighlight()}
-          customBorderChars={{
-            ...SplitBorder.customBorderChars,
-            bottomLeft: "╹",
-          }}
+          title={store.mode === "shell" ? " Command " : " Task "}
+          backgroundColor={theme.backgroundPanel}
         >
           <box
             paddingLeft={2}
             paddingRight={2}
             paddingTop={1}
             flexShrink={0}
-            backgroundColor={theme.backgroundElement}
+            backgroundColor={theme.backgroundPanel}
             flexGrow={1}
             width="100%"
           >
@@ -1372,7 +1373,7 @@ export function Prompt(props: PromptProps) {
               placeholderColor={theme.textMuted}
               textColor={leader() ? theme.textMuted : theme.text}
               focusedTextColor={leader() ? theme.textMuted : theme.text}
-              minHeight={1}
+              minHeight={props.sessionID ? 2 : 3}
               maxHeight={maxHeight()}
               onContentChange={() => {
                 const value = input.plainText
@@ -1441,28 +1442,40 @@ export function Prompt(props: PromptProps) {
               cursorStyle={tuiConfig.cursor}
               syntaxStyle={syntax()}
             />
-            <box flexDirection="row" flexShrink={0} paddingTop={1} gap={1} justifyContent="space-between">
-              <box flexDirection="row" gap={1}>
+            <box
+              flexDirection={dimensions().width < 70 ? "column" : "row"}
+              flexShrink={0}
+              paddingTop={1}
+              gap={1}
+              justifyContent="space-between"
+            >
+              <box flexDirection="row" gap={1} flexGrow={1} flexShrink={1} minWidth={0}>
                 <Show when={local.agent.current()} fallback={<box height={1} />}>
                   {(agent) => (
                     <>
-                      <text fg={fadeColor(highlight(), agentMetaAlpha())}>
-                        {store.mode === "shell" ? "Shell" : Locale.titlecase(agent().name)}
+                      <text flexShrink={0} fg={fadeColor(highlight(), agentMetaAlpha())}>
+                        {store.mode === "shell" ? "Shell" : agent().name === "computer_background_mac" ? "Background Mac" : agent().name === "computer_background" ? "Background browser" : agent().name === "computer" ? "Visible control" : Locale.titlecase(agent().name)}
                       </text>
                       <Show when={store.mode === "normal" && local.permission.mode === "auto"}>
                         <text fg={fadeColor(theme.textMuted, agentMetaAlpha())}>auto</text>
                       </Show>
                       <Show when={store.mode === "normal"}>
-                        <box flexDirection="row" gap={1}>
+                        <box flexDirection="row" gap={1} flexGrow={1} flexShrink={1} minWidth={0}>
                           <text fg={fadeColor(theme.textMuted, modelMetaAlpha())}>·</text>
                           <text
-                            flexShrink={0}
+                            flexShrink={1}
+                            truncate
+                            wrapMode="none"
                             fg={fadeColor(leader() ? theme.textMuted : theme.text, modelMetaAlpha())}
                           >
-                            {local.model.parsed().model}
+                            {local.model.current() ? local.model.parsed().model : "Choose a model"}
                           </text>
-                          <text fg={fadeColor(theme.textMuted, modelMetaAlpha())}>{currentProviderLabel()}</text>
-                          <Show when={showVariant()}>
+                          <Show when={local.model.current() && dimensions().width >= 90}>
+                            <text truncate wrapMode="none" fg={fadeColor(theme.textMuted, modelMetaAlpha())}>
+                              {currentProviderLabel()}
+                            </text>
+                          </Show>
+                          <Show when={showVariant() && dimensions().width >= 70}>
                             <text fg={fadeColor(theme.textMuted, variantMetaAlpha())}>·</text>
                             <text>
                               <span style={{ fg: fadeColor(theme.warning, variantMetaAlpha()), bold: true }}>
@@ -1476,39 +1489,14 @@ export function Prompt(props: PromptProps) {
                   )}
                 </Show>
               </box>
-              <Show when={hasRightContent()}>
-                <box flexDirection="row" gap={1} alignItems="center">
-                  {props.right}
-                </box>
-              </Show>
+              <box flexDirection="row" gap={1} alignItems="center" flexShrink={0}>
+                <Show when={store.mode === "normal" && local.agent.current()}>
+                  <ModelSourceControls />
+                </Show>
+                <Show when={hasRightContent()}>{props.right}</Show>
+              </box>
             </box>
           </box>
-        </box>
-        <box
-          height={1}
-          border={["left"]}
-          borderColor={borderHighlight()}
-          customBorderChars={{
-            ...EmptyBorder,
-            vertical: theme.backgroundElement.a !== 0 ? "╹" : " ",
-          }}
-        >
-          <box
-            height={1}
-            border={["bottom"]}
-            borderColor={theme.backgroundElement}
-            customBorderChars={
-              theme.backgroundElement.a !== 0
-                ? {
-                    ...EmptyBorder,
-                    horizontal: "▀",
-                  }
-                : {
-                    ...EmptyBorder,
-                    horizontal: " ",
-                  }
-            }
-          />
         </box>
         <box width="100%" flexDirection="row" justifyContent="space-between">
           <Switch>
@@ -1644,7 +1632,7 @@ export function Prompt(props: PromptProps) {
             </Match>
             <Match when={true}>
               {props.hint ?? (
-                <Show when={props.sessionID} fallback={<text />}>
+                <Show when={props.sessionID} fallback={<text fg={theme.textMuted}><span style={{ fg: theme.primary }}>enter</span> send</text>}>
                   <box marginLeft={1}>
                     <text fg={theme.textMuted}>{location()?.directory ?? paths.cwd}</text>
                   </box>

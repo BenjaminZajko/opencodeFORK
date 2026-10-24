@@ -60,6 +60,11 @@ export const prepare = Effect.fn("LLMRequestPrep.prepare")(function* (input: Pre
       ...(input.agent.prompt ? [input.agent.prompt] : SystemPrompt.provider(input.model)),
       ...input.system,
       ...(input.user.system ? [input.user.system] : []),
+      ...(input.model.providerID === "ollama" && !input.small
+        ? [
+            "Use the provided tool API when a task needs a tool. Never print tool-call JSON as your reply. Use only the exact file path requested by the user or a path inside the current project; never use example paths such as /path/to/file.txt. Answer ordinary conversation directly; do not create a todo list for a simple greeting.",
+          ]
+        : []),
     ]
       .filter((x) => x)
       .join("\n"),
@@ -130,6 +135,8 @@ export const prepare = Effect.fn("LLMRequestPrep.prepare")(function* (input: Pre
       options,
     },
   )
+
+  if (["desktop", "computer", "computer_background", "computer_background_mac"].includes(input.agent.name)) params.options.parallelToolCalls = false
 
   const { headers } = yield* input.plugin.trigger(
     "chat.headers",

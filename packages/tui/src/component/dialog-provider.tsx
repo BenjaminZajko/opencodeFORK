@@ -1,4 +1,5 @@
-import { createMemo, createSignal, onMount, Show } from "solid-js"
+import { freeProvider } from "@opencode-ai/core/olivecode/models"
+import { createMemo, createSignal, onCleanup, onMount, Show } from "solid-js"
 import { useSync } from "../context/sync"
 import { map, pipe, sortBy } from "remeda"
 import { DialogSelect } from "../ui/dialog-select"
@@ -15,15 +16,10 @@ import { isConsoleManagedProvider } from "../util/provider-origin"
 import { useConnected } from "./use-connected"
 import { useBindings } from "../keymap"
 import { useClipboard } from "../context/clipboard"
+import { useDialogRequest } from "./dialog-request"
+import open from "open"
 
-const PROVIDER_PRIORITY: Record<string, number> = {
-  opencode: 0,
-  "opencode-go": 1,
-  openai: 2,
-  "github-copilot": 3,
-  anthropic: 4,
-  google: 5,
-}
+const PROVIDER_PRIORITY: Record<string, number> = { openrouter: 0, groq: 1, mistral: 2 }
 
 const CUSTOM_PROVIDER_OPTION_VALUE = "__opencode_custom_provider__"
 const CUSTOM_PROVIDER_ID = /^[a-z0-9][a-z0-9-_]*$/
@@ -47,7 +43,7 @@ type ProviderOption =
 export function providerOptions(list: { id: string; name: string }[]): ProviderOption[] {
   return [
     ...pipe(
-      list,
+      list.filter((provider) => freeProvider(provider.id)),
       sortBy(
         (x) => PROVIDER_PRIORITY[x.id] ?? 99,
         (x) => x.name.toLowerCase(),
@@ -58,22 +54,11 @@ export function providerOptions(list: { id: string; name: string }[]): ProviderO
         title: provider.name,
         value: provider.id,
         providerID: provider.id,
-        description: {
-          opencode: "(Recommended)",
-          anthropic: "(API key)",
-          openai: "(ChatGPT Plus/Pro or API key)",
-          "opencode-go": "Low cost subscription for everyone",
-        }[provider.id],
-        category: provider.id in PROVIDER_PRIORITY ? "Popular" : "Providers",
+        description: { openrouter: "Free variants only", groq: "Use a Free account", mistral: "Use Free mode" }[provider.id],
+        category: "Free providers",
       })),
     ),
-    {
-      type: "custom",
-      title: "Other",
-      value: CUSTOM_PROVIDER_OPTION_VALUE,
-      description: "Custom provider",
-      category: "Providers",
-    },
+
   ]
 }
 
@@ -83,7 +68,7 @@ export function normalizeCustomProviderID(value: string) {
   return providerID
 }
 
-export function createDialogProviderOptions() {
+export function createDialogProviderOptions(onConnected?: (providerID: string) => void) {
   const sync = useSync()
   const dialog = useDialog()
   const sdk = useSDK()
@@ -96,7 +81,7 @@ export function createDialogProviderOptions() {
       placeholder: "Provider id",
       description: () => (
         <text fg={theme.textMuted}>
-          This only stores a credential. Configure the provider in opencode.json to use it.
+          This only stores a credential. Configure the provider in olivecode.json to use it.
         </text>
       ),
     })
@@ -182,11 +167,21 @@ export function createDialogProviderOptions() {
                 inputs = value
               }
 
-              const result = await sdk.client.provider.oauth.authorize({
-                providerID,
-                method: index,
-                inputs,
-              })
+              const result = await sdk.client.provider.oauth
+                .authorize({
+                  providerID,
+                  method: index,
+                  inputs,
+                })
+                .catch(() => undefined)
+              if (!result) {
+                toast.show({
+                  variant: "error",
+                  message: "Could not start browser sign-in. Try again or choose an API key.",
+                })
+                dialog.clear()
+                return
+              }
               if (result.error) {
                 toast.show({
                   variant: "error",
@@ -197,12 +192,24 @@ export function createDialogProviderOptions() {
               }
               if (result.data?.method === "code") {
                 dialog.replace(() => (
-                  <CodeMethod providerID={providerID} title={method.label} index={index} authorization={result.data!} />
+                  <CodeMethod
+                    providerID={providerID}
+                    title={method.label}
+                    index={index}
+                    authorization={result.data!}
+                    onConnected={onConnected}
+                  />
                 ))
               }
               if (result.data?.method === "auto") {
                 dialog.replace(() => (
-                  <AutoMethod providerID={providerID} title={method.label} index={index} authorization={result.data!} />
+                  <AutoMethod
+                    providerID={providerID}
+                    title={method.label}
+                    index={index}
+                    authorization={result.data!}
+                    onConnected={onConnected}
+                  />
                 ))
               }
             }
@@ -214,7 +221,7 @@ export function createDialogProviderOptions() {
                 metadata = value
               }
               return dialog.replace(() => (
-                <ApiMethod providerID={providerID} title={method.label} metadata={metadata} />
+                <ApiMethod providerID={providerID} title={method.label} metadata={metadata} onConnected={onConnected} />
               ))
             }
           },
@@ -227,7 +234,7 @@ export function createDialogProviderOptions() {
 
 export function DialogProvider() {
   const options = createDialogProviderOptions()
-  return <DialogSelect title="Connect a provider" options={options()} />
+  return <DialogSelect title="Connect free providers" options={options()} />
 }
 
 interface AutoMethodProps {
@@ -235,17 +242,28 @@ interface AutoMethodProps {
   providerID: string
   title: string
   authorization: ProviderAuthAuthorization
+  onConnected?: (providerID: string) => void
 }
-function AutoMethod(props: AutoMethodProps) {
+export function AutoMethod(props: AutoMethodProps) {
   const { theme } = useTheme()
   const sdk = useSDK()
   const dialog = useDialog()
   const sync = useSync()
   const toast = useToast()
   const clipboard = useClipboard()
+  const controller = new AbortController()
+  onCleanup(() => controller.abort())
 
   useBindings(() => ({
     bindings: [
+      {
+        key: "o",
+        desc: "Open sign-in page",
+        group: "Dialog",
+        cmd: () => {
+          void open(props.authorization.url).catch(toast.error)
+        },
+      },
       {
         key: "c",
         desc: "Copy provider code",
@@ -263,24 +281,40 @@ function AutoMethod(props: AutoMethodProps) {
   }))
 
   onMount(async () => {
-    const result = await sdk.client.provider.oauth.callback({
-      providerID: props.providerID,
-      method: props.index,
-    })
-    if (result.error) {
-      toast.show({
-        variant: "error",
-        message:
-          "name" in result.error && result.error.name === "ProviderAuthOauthCallbackFailed"
-            ? "OAuth authorization failed. Try /connect again."
-            : JSON.stringify(result.error),
-      })
+    try {
+      const result = await sdk.client.provider.oauth.callback(
+        {
+          providerID: props.providerID,
+          method: props.index,
+        },
+        { signal: controller.signal },
+      )
+      if (controller.signal.aborted) return
+      if (result.error) {
+        toast.show({
+          variant: "error",
+          message:
+            "name" in result.error && result.error.name === "ProviderAuthOauthCallbackFailed"
+              ? "OAuth authorization failed. Try /connect again."
+              : JSON.stringify(result.error),
+        })
+        dialog.clear()
+        return
+      }
+      await sdk.client.instance.dispose(undefined, { signal: controller.signal })
+      if (controller.signal.aborted) return
+      await sync.bootstrap()
+      if (controller.signal.aborted) return
+      if (props.onConnected) {
+        props.onConnected(props.providerID)
+        return
+      }
+      dialog.replace(() => <DialogModel providerID={props.providerID} />)
+    } catch {
+      if (controller.signal.aborted) return
+      toast.show({ variant: "error", message: "Could not finish sign-in. Try /start again." })
       dialog.clear()
-      return
     }
-    await sdk.client.instance.dispose()
-    await sync.bootstrap()
-    dialog.replace(() => <DialogModel providerID={props.providerID} />)
   })
 
   return (
@@ -294,12 +328,15 @@ function AutoMethod(props: AutoMethodProps) {
         </text>
       </box>
       <box gap={1}>
-        <Link href={props.authorization.url} fg={theme.primary} />
+        <Link href={props.authorization.url} fg={theme.primary}>
+          Open sign-in page
+        </Link>
         <text fg={theme.textMuted}>{props.authorization.instructions}</text>
       </box>
       <text fg={theme.textMuted}>Waiting for authorization…</text>
       <text fg={theme.text}>
-        c <span style={{ fg: theme.textMuted }}>copy</span>
+        o <span style={{ fg: theme.textMuted }}>open browser</span>
+        {"  "}c <span style={{ fg: theme.textMuted }}>copy</span>
       </text>
     </box>
   )
@@ -310,8 +347,9 @@ interface CodeMethodProps {
   title: string
   providerID: string
   authorization: ProviderAuthAuthorization
+  onConnected?: (providerID: string) => void
 }
-function CodeMethod(props: CodeMethodProps) {
+export function CodeMethod(props: CodeMethodProps) {
   const { theme } = useTheme()
   const sdk = useSDK()
   const sync = useSync()
@@ -331,6 +369,10 @@ function CodeMethod(props: CodeMethodProps) {
         if (!error) {
           await sdk.client.instance.dispose()
           await sync.bootstrap()
+          if (props.onConnected) {
+            props.onConnected(props.providerID)
+            return
+          }
           dialog.replace(() => <DialogModel providerID={props.providerID} />)
           return
         }
@@ -354,6 +396,7 @@ interface ApiMethodProps {
   title: string
   metadata?: Record<string, string>
   custom?: boolean
+  onConnected?: (providerID: string) => void
 }
 function ApiMethod(props: ApiMethodProps) {
   const dialog = useDialog()
@@ -361,58 +404,85 @@ function ApiMethod(props: ApiMethodProps) {
   const sync = useSync()
   const toast = useToast()
   const { theme } = useTheme()
+  const request = useDialogRequest()
+  const [busy, setBusy] = createSignal(false)
+  const [failed, setFailed] = createSignal(false)
 
   return (
     <DialogPrompt
       title={props.title}
       placeholder="API key"
-      description={() =>
-        ({
-          opencode: (
-            <box gap={1}>
-              <text fg={theme.textMuted}>
-                OpenCode Zen gives you access to all the best coding models at the cheapest prices with a single API
-                key.
-              </text>
-              <text fg={theme.text}>
-                Go to <span style={{ fg: theme.primary }}>https://opencode.ai/zen</span> to get a key
-              </text>
-            </box>
-          ),
-          "opencode-go": (
-            <box gap={1}>
-              <text fg={theme.textMuted}>
-                OpenCode Go is a $10 per month subscription that provides reliable access to popular open coding models
-                with generous usage limits.
-              </text>
-              <text fg={theme.text}>
-                Go to <span style={{ fg: theme.primary }}>https://opencode.ai/go</span> and enable OpenCode Go
-              </text>
-            </box>
-          ),
-        })[props.providerID] ?? undefined
-      }
+      busy={busy()}
+      busyText="Saving account…"
+      description={() => (
+        <box gap={1}>
+          <Show when={failed()}>
+            <text fg={theme.error}>Could not save this account. Check the connection and try again.</text>
+          </Show>
+          {{
+            openrouter: (
+              <box gap={1}>
+                <text fg={theme.textMuted}>Create a key in your own OpenRouter account, then paste it here.</text>
+                <Link href="https://openrouter.ai/settings/keys" fg={theme.primary} />
+              </box>
+            ),
+            groq: (
+              <box gap={1}>
+                <text fg={theme.text}>
+                  Go to <span style={{ fg: theme.primary }}>https://console.groq.com/keys</span> to get a key
+                </text>
+              </box>
+            ),
+            mistral: (
+              <box gap={1}>
+                <text fg={theme.text}>
+                  Go to <span style={{ fg: theme.primary }}>https://console.mistral.ai</span> (API Keys) to get a key
+                </text>
+              </box>
+            ),
+          }[props.providerID] ?? undefined}
+        </box>
+      )}
       onConfirm={async (value) => {
-        if (!value) return
-        await sdk.client.auth.set({
-          providerID: props.providerID,
-          auth: {
-            type: "api",
-            key: value,
-            ...(props.metadata ? { metadata: props.metadata } : {}),
-          },
-        })
-        await sdk.client.instance.dispose()
-        await sync.bootstrap()
-        if (props.custom && !sync.data.provider_next.all.some((provider) => provider.id === props.providerID)) {
-          toast.show({
-            variant: "info",
-            message: `Saved credential for ${props.providerID}. Configure it in opencode.json to use it.`,
-          })
-          dialog.clear()
-          return
+        if (!value.trim() || busy()) return
+        setBusy(true)
+        setFailed(false)
+        try {
+          const saved = await request((signal) =>
+            sdk.client.auth.set(
+              {
+                providerID: props.providerID,
+                auth: {
+                  type: "api",
+                  key: value.trim(),
+                  ...(props.metadata ? { metadata: props.metadata } : {}),
+                },
+              },
+              { signal },
+            ),
+          )
+          if (saved.error) throw new Error("Credential save failed")
+          const refreshed = await request((signal) => sdk.client.instance.dispose(undefined, { signal }))
+          if (refreshed.error) throw new Error("Provider refresh failed")
+          await request(() => sync.bootstrap())
+          if (props.custom && !sync.data.provider_next.all.some((provider) => provider.id === props.providerID)) {
+            toast.show({
+              variant: "info",
+              message: `Saved credential for ${props.providerID}. Configure it in olivecode.json to use it.`,
+            })
+            dialog.clear()
+            return
+          }
+          if (props.onConnected) {
+            props.onConnected(props.providerID)
+            return
+          }
+          dialog.replace(() => <DialogModel providerID={props.providerID} />)
+        } catch (error) {
+          if (!(error instanceof DOMException && error.name === "AbortError")) setFailed(true)
+        } finally {
+          setBusy(false)
         }
-        dialog.replace(() => <DialogModel providerID={props.providerID} />)
       }}
     />
   )
@@ -422,7 +492,7 @@ interface PromptsMethodProps {
   dialog: ReturnType<typeof useDialog>
   prompts: NonNullable<ProviderAuthMethod["prompts"]>[number][]
 }
-async function PromptsMethod(props: PromptsMethodProps) {
+export async function PromptsMethod(props: PromptsMethodProps) {
   const inputs: Record<string, string> = {}
   for (const prompt of props.prompts) {
     if (prompt.when) {
