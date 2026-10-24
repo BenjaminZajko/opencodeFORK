@@ -14,7 +14,12 @@ const result = await Bun.build({
   format: "esm",
   outdir: output,
   naming: "[name].js",
-  external: ["node-gyp"],
+  external: [
+    "node-gyp",
+    ...["darwin-arm64", "linux-x64-musl", "linux-x64", "linux-arm64-musl", "linux-arm64", "win32-x64", "win32-arm64"]
+      .filter((target) => target !== `darwin-${process.arch}`)
+      .map((target) => `@opentui/core-${target}`),
+  ],
   define: {
     OPENCODE_VERSION: JSON.stringify("0.1.0-catalina-probe"),
     OPENCODE_CHANNEL: JSON.stringify("olivecode-compat-probe"),

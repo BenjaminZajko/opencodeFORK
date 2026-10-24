@@ -15,6 +15,24 @@ assert.deepEqual(
     .toArray(),
   [2, 4, 3, 6],
 )
+const groups = Map.groupBy(
+  [
+    { id: "cloud", n: 1 },
+    { id: "local", n: 2 },
+    { id: "cloud", n: 3 },
+  ],
+  (item) => item.id,
+)
+assert.deepEqual(Array.from(groups), [
+  [
+    "cloud",
+    [
+      { id: "cloud", n: 1 },
+      { id: "cloud", n: 3 },
+    ],
+  ],
+  ["local", [{ id: "local", n: 2 }]],
+])
 const one = new AbortController(),
   two = new AbortController()
 const combined = AbortSignal.any([one.signal, two.signal])

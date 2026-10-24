@@ -1,3 +1,4 @@
+import "core-js/actual/map/group-by.js"
 import { ChildProcess } from "node:child_process"
 import { TextDecoder as CompatibleTextDecoder } from "@kayahr/text-encoding"
 import "core-js/actual/iterator/index.js"
