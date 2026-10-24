@@ -35,3 +35,13 @@ Only on Bun1.0.14, the compatibility adapters now load pinned FormatJS9.4.3 `pol
 The offline checker now exercises currency (including negative and zero), compact counts, percentages, Slovak separators, number parts/ranges, errors and other interface Intl helpers in both main and worker threads. The normal version check alone is not an interface compatibility test.
 
 An audit compares all159runtime ICU imports with Apple’s ICU-64260.0.1 public headers. Thirteen imports lack declarations in those headers; this is a conservative potential-gap list, not proof of the exact system dylib exports. The test-only interposer blocks all13, and separate timezone/number negative controls must fail88. The formatting/helper and interface tests must pass with that interposer active. This does not simulate all OS differences; another physical Catalina test remains required.
+
+## Preview r4: corrected failure simulation and plural-rule dependency
+
+Physical r3 checker and interface both still fail on the number-range symbol. The FormatJS number implementation constructs `Intl.PluralRules`, and the archived engine initializes the same newer ICU number-range formatter for plural rules ([engine source](https://github.com/oven-sh/WebKit/blob/b72b839d2c18ae71952d215a9654797f044b67e7/Source/JavaScriptCore/runtime/IntlPluralRules.cpp#L140-L144)). r4 loads pinned JS PluralRules before NumberFormat, with en/sk locale data.
+
+Important correction to earlier evidence: protected `/bin/sh` startup stripped DYLD_INSERT_LIBRARIES in positive test cases. Direct negative controls retained it, so r2/r3 positive cases gave false confidence about ICU isolation. Their ordinary local results remain observations on a modern OS, but their claimed absent-API simulation is invalid and superseded. The harness now forwards the library path in a separate test variable and exports DYLD_INSERT_LIBRARIES inside the shell immediately before exec of Bun. A native PluralRules negative control through that same shell boundary must fail88 at the exact missing symbol.
+
+With the injection working, the Intl helper tests also expose `ulistfmt_openForType`. r4 adds pinned JavaScript ListFormat and Segmenter compatibility implementations rather than leaving those interface text paths tied to newer ICU APIs. The string-width adapter is imported after replacing Segmenter, since it captures a segmenter at module initialization. The diagnostic library now prints the exact reached symbol.
+
+All compatibility polyfills remain confined to the archived-runtime preview. They are bundled with their required licenses; there is no runtime dependency download or global toolchain change. Actual Catalina r4 interface verification is still required.

@@ -3,6 +3,12 @@ import assert from "node:assert/strict"
 import { isMainThread, parentPort, Worker } from "node:worker_threads"
 
 function check() {
+  if (Bun.version === "1.0.14") {
+    assert.equal((Intl.NumberFormat as unknown as { polyfilled: boolean }).polyfilled, true)
+    assert.equal((Intl.PluralRules as unknown as { polyfilled: boolean }).polyfilled, true)
+  }
+  assert.equal(new Intl.PluralRules("sk").select(2), "few")
+  assert.equal(new Intl.PluralRules("en", { type: "ordinal" }).select(2), "two")
   const money = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" })
   assert.equal(money.format(1234.5), "$1,234.50")
   assert.equal(money.format(-0.01), "-$0.01")

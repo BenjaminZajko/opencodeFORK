@@ -3,7 +3,10 @@
   "private": true,
   "type": "module",
   "dependencies": {
+    "@formatjs/intl-listformat": "8.3.15",
     "@formatjs/intl-numberformat": "9.4.3",
+    "@formatjs/intl-pluralrules": "6.3.16",
+    "@formatjs/intl-segmenter": "12.2.15",
     "@kayahr/text-encoding": "2.2.0",
     "core-js": "3.51.0",
     "esbuild": "0.25.12",

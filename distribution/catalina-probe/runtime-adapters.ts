@@ -4,9 +4,7 @@ import { ChildProcess } from "node:child_process"
 import { TextDecoder as CompatibleTextDecoder } from "@kayahr/text-encoding"
 import "core-js/actual/iterator/index.js"
 import { Statement } from "bun:sqlite"
-import stringWidth from "string-width"
 globalThis.TextDecoder = CompatibleTextDecoder
-if (typeof Bun.stringWidth !== "function") Bun.stringWidth = stringWidth
 // Never pretend that the old database can return full-width SQLite integers.
 if (typeof Statement.prototype.safeIntegers !== "function") {
   Statement.prototype.safeIntegers = function (enabled = true) {
@@ -85,7 +83,20 @@ if (typeof process.getBuiltinModule !== "function") {
 // Force a JS implementation before importing application modules; feature
 // detection itself can enter the unavailable native constructor on Catalina.
 if (Bun.version === "1.0.14") {
+  await import("@formatjs/intl-listformat/polyfill-force.js")
+  await import("@formatjs/intl-listformat/locale-data/en.js")
+  await import("@formatjs/intl-listformat/locale-data/sk.js")
+  await import("@formatjs/intl-segmenter/polyfill-force.js")
+  await import("@formatjs/intl-pluralrules/polyfill-force.js")
+  await import("@formatjs/intl-pluralrules/locale-data/en.js")
+  await import("@formatjs/intl-pluralrules/locale-data/sk.js")
   await import("@formatjs/intl-numberformat/polyfill-force.js")
   await import("@formatjs/intl-numberformat/locale-data/en.js")
   await import("@formatjs/intl-numberformat/locale-data/sk.js")
+}
+
+// Load after Segmenter is replaced: string-width captures a segmenter at import time.
+if (typeof Bun.stringWidth !== "function") {
+  const width = await import("string-width")
+  Bun.stringWidth = width.default
 }

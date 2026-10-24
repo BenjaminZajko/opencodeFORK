@@ -43,7 +43,7 @@ exec "$preview_app/../runtime/bun" --no-install "$preview_app/bootstrap.js" "$@"
 (app/'olivecode-preview').chmod(0o755)
 shutil.copyfile(source.parent.parent/'LICENSE',root/'LICENSE-OliveCode.txt')
 notices=[]
-for name in ('@formatjs/intl-numberformat','@formatjs/bigdecimal','@formatjs/intl-localematcher','@formatjs/fast-memoize'):
+for name in ('@formatjs/intl-numberformat','@formatjs/intl-pluralrules','@formatjs/intl-listformat','@formatjs/intl-segmenter','@formatjs/bigdecimal','@formatjs/intl-localematcher','@formatjs/fast-memoize'):
     metadata=json.loads((source/'node_modules'/name/'package.json').read_text())
     notices.append(name+' '+metadata['version']+'\n'+(source/'node_modules'/name/'LICENSE.md').read_text())
 (root/'LICENSE-FormatJS.txt').write_text('\n\n'.join(notices))
@@ -128,7 +128,7 @@ The preview keeps its own settings under Library/Application Support/OliveCode C
 
 The wrapper reads the local timezone identifier from /etc/localtime when TZ is unset. It passes that identifier to this process and its children to avoid a newer ICU lookup absent on Catalina. An existing nonempty TZ is preserved. It does not change the Mac’s timezone.
 
-For the archived runtime, number formatting uses pinned FormatJS JavaScript code and English/Slovak locale data, avoiding newer ICU number-range functions absent on Catalina. Other requested number locales fall back to the bundled locale data.
+For the archived runtime, number formatting, plural rules, lists and text segmentation use pinned FormatJS JavaScript code and English/Slovak locale data, avoiding newer ICU number-range functions absent on Catalina. Other requested number locales fall back to the bundled locale data.
 
 This preview uses an archived 2023 runtime. Runtime security/support assessment is still outstanding; it is not ready for general distribution. The upstream public installer still requires the currently supported macOS version. Do not distribute this trial as official Catalina support.
 ''')
