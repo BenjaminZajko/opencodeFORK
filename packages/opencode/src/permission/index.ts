@@ -11,13 +11,14 @@ export const Event = PermissionV1.Event
 
 export interface Interface {
   readonly ask: (input: PermissionV1.AskInput) => Effect.Effect<void, PermissionV1.Error>
+  readonly askWithReceipt?: (input: PermissionV1.AskInput) => Effect.Effect<boolean, PermissionV1.Error>
   readonly reply: (input: PermissionV1.ReplyInput) => Effect.Effect<void, PermissionV1.NotFoundError>
   readonly list: () => Effect.Effect<ReadonlyArray<PermissionV1.Request>>
 }
 
 interface PendingEntry {
   info: PermissionV1.Request
-  deferred: Deferred.Deferred<void, PermissionV1.RejectedError | PermissionV1.CorrectedError>
+  deferred: Deferred.Deferred<boolean, PermissionV1.RejectedError | PermissionV1.CorrectedError>
 }
 
 interface State {
@@ -64,7 +65,7 @@ const layer = Layer.effect(
       }),
     )
 
-    const ask = Effect.fn("Permission.ask")(function* (input: PermissionV1.AskInput) {
+    const askWithReceipt = Effect.fn("Permission.askWithReceipt")(function* (input: PermissionV1.AskInput) {
       const { approved, pending } = yield* InstanceState.get(state)
       const { ruleset, ...request } = input
       let needsAsk = false
@@ -81,7 +82,7 @@ const layer = Layer.effect(
         needsAsk = true
       }
 
-      if (!needsAsk) return
+      if (!needsAsk) return false
 
       const id = request.id ?? PermissionV1.ID.ascending()
       const info: PermissionV1.Request = {
@@ -95,7 +96,7 @@ const layer = Layer.effect(
       }
       yield* Effect.logInfo("asking", { id, permission: info.permission, patterns: info.patterns })
 
-      const deferred = yield* Deferred.make<void, PermissionV1.RejectedError | PermissionV1.CorrectedError>()
+      const deferred = yield* Deferred.make<boolean, PermissionV1.RejectedError | PermissionV1.CorrectedError>()
       pending.set(id, { info, deferred })
       yield* events.publish(Event.Asked, info)
       return yield* Effect.ensuring(
@@ -139,7 +140,7 @@ const layer = Layer.effect(
         return
       }
 
-      yield* Deferred.succeed(existing.deferred, undefined)
+      yield* Deferred.succeed(existing.deferred, true)
       if (input.reply === "once") return
 
       for (const pattern of existing.info.always) {
@@ -162,7 +163,7 @@ const layer = Layer.effect(
           requestID: item.info.id,
           reply: "always",
         })
-        yield* Deferred.succeed(item.deferred, undefined)
+        yield* Deferred.succeed(item.deferred, true)
       }
     })
 
@@ -171,7 +172,8 @@ const layer = Layer.effect(
       return Array.from(pending.values(), (item) => item.info)
     })
 
-    return Service.of({ ask, reply, list })
+    const ask = (input: PermissionV1.AskInput) => askWithReceipt(input).pipe(Effect.asVoid)
+    return Service.of({ ask, askWithReceipt, reply, list })
   }),
 )
 

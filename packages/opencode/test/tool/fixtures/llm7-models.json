@@ -1,0 +1,637 @@
+{
+  "_comment": "Cached verification snapshot of the live LLM7.io model catalog. Source: live unauthenticated GET https://api.llm7.io/v1/models (45 records). $0 basis: free-token tier (1M tokens/day, no payment instrument; payment only for Pro/topped-up per TERMS) \u2014 usage_based_only:true models are paid-only. Verified 2026-09-10; re-verify before adding. No catalog entry yet: no llm7 provider section exists in the models.dev snapshot or upstream, and strict getModel lookup would leave any concrete unresolvable.",
+  "source": "https://api.llm7.io/v1/models",
+  "verified": "2026-09-10",
+  "models": [
+    {
+      "id": "DeepSeek-V4-Flash-0731",
+      "tier": "turbo",
+      "pricing": {
+        "input": 0.02,
+        "output": 0.04
+      },
+      "context_window": 400000,
+      "tools_calling": true,
+      "reasoning": true,
+      "stream": true,
+      "availability_last_hour_percent": 100.0,
+      "usage_based_only": true
+    },
+    {
+      "id": "Inkling",
+      "tier": "pro",
+      "pricing": {
+        "input": 1.0,
+        "output": 4.05
+      },
+      "context_window": 512000,
+      "tools_calling": false,
+      "reasoning": true,
+      "stream": true,
+      "availability_last_hour_percent": 100.0,
+      "usage_based_only": true
+    },
+    {
+      "id": "Inkling-Small",
+      "tier": "pro",
+      "pricing": {
+        "input": 0.5,
+        "output": 1.2
+      },
+      "context_window": 512000,
+      "tools_calling": true,
+      "reasoning": true,
+      "stream": true,
+      "availability_last_hour_percent": 100.0,
+      "usage_based_only": true
+    },
+    {
+      "id": "L3-8B-Lunaris-v1-Turbo",
+      "tier": "pro",
+      "pricing": {
+        "input": 0.04,
+        "output": 0.05
+      },
+      "context_window": 8000,
+      "tools_calling": false,
+      "reasoning": false,
+      "stream": true,
+      "availability_last_hour_percent": 100.0,
+      "usage_based_only": true
+    },
+    {
+      "id": "XiaomiMiMo/MiMo-V2.5",
+      "tier": "pro",
+      "pricing": {
+        "input": 0.4,
+        "output": 2.0
+      },
+      "context_window": 256000,
+      "tools_calling": true,
+      "reasoning": false,
+      "stream": true,
+      "availability_last_hour_percent": 100.0,
+      "usage_based_only": true
+    },
+    {
+      "id": "XiaomiMiMo/MiMo-V2.5-Pro",
+      "tier": "pro",
+      "pricing": {
+        "input": 1.0,
+        "output": 3.0
+      },
+      "context_window": 1024000,
+      "tools_calling": true,
+      "reasoning": false,
+      "stream": true,
+      "availability_last_hour_percent": 100.0,
+      "usage_based_only": true
+    },
+    {
+      "id": "chroma-v.46-flash",
+      "tier": "pro",
+      "pricing": {
+        "input": null,
+        "output": null
+      },
+      "context_window": null,
+      "tools_calling": true,
+      "reasoning": true,
+      "stream": true,
+      "availability_last_hour_percent": 100.0,
+      "usage_based_only": true
+    },
+    {
+      "id": "claude-fable-5",
+      "tier": "pro",
+      "pricing": {
+        "input": 4.5,
+        "output": 30.0
+      },
+      "context_window": 1000000,
+      "tools_calling": true,
+      "reasoning": true,
+      "stream": true,
+      "availability_last_hour_percent": 100.0,
+      "usage_based_only": true
+    },
+    {
+      "id": "claude-fable-5-1",
+      "tier": "pro",
+      "pricing": {
+        "input": 4.0,
+        "output": 15.0
+      },
+      "context_window": 1000000,
+      "tools_calling": true,
+      "reasoning": true,
+      "stream": true,
+      "availability_last_hour_percent": 100.0,
+      "usage_based_only": true
+    },
+    {
+      "id": "claude-haiku-4-5",
+      "tier": "pro",
+      "pricing": {
+        "input": 0.04,
+        "output": 0.2
+      },
+      "context_window": 200000,
+      "tools_calling": true,
+      "reasoning": false,
+      "stream": true,
+      "availability_last_hour_percent": 100.0,
+      "usage_based_only": true
+    },
+    {
+      "id": "claude-opus-4-8",
+      "tier": "pro",
+      "pricing": {
+        "input": 2.25,
+        "output": 12.19
+      },
+      "context_window": 1000000,
+      "tools_calling": true,
+      "reasoning": true,
+      "stream": true,
+      "availability_last_hour_percent": 100.0,
+      "usage_based_only": true
+    },
+    {
+      "id": "claude-opus-5",
+      "tier": "pro",
+      "pricing": {
+        "input": 2.5,
+        "output": 12.5
+      },
+      "context_window": 1000000,
+      "tools_calling": true,
+      "reasoning": true,
+      "stream": true,
+      "availability_last_hour_percent": 100.0,
+      "usage_based_only": true
+    },
+    {
+      "id": "claude-sonnet-4-6",
+      "tier": "pro",
+      "pricing": {
+        "input": 0.12,
+        "output": 0.45
+      },
+      "context_window": 1000000,
+      "tools_calling": true,
+      "reasoning": true,
+      "stream": true,
+      "availability_last_hour_percent": 100.0,
+      "usage_based_only": true
+    },
+    {
+      "id": "claude-sonnet-5",
+      "tier": "pro",
+      "pricing": {
+        "input": 0.45,
+        "output": 2.25
+      },
+      "context_window": 1000000,
+      "tools_calling": true,
+      "reasoning": true,
+      "stream": true,
+      "availability_last_hour_percent": 100.0,
+      "usage_based_only": true
+    },
+    {
+      "id": "codestral-latest",
+      "tier": "turbo",
+      "pricing": {
+        "input": 0.01,
+        "output": 0.02
+      },
+      "context_window": 32000,
+      "tools_calling": true,
+      "reasoning": false,
+      "stream": true,
+      "availability_last_hour_percent": 99.44,
+      "usage_based_only": false
+    },
+    {
+      "id": "dark-beast-krea2",
+      "tier": "pro",
+      "pricing": {
+        "input": null,
+        "output": null
+      },
+      "context_window": null,
+      "tools_calling": true,
+      "reasoning": true,
+      "stream": true,
+      "availability_last_hour_percent": 100.0,
+      "usage_based_only": true
+    },
+    {
+      "id": "deepseek-v4-flash:0731",
+      "tier": "pro",
+      "pricing": {
+        "input": 0.18,
+        "output": 0.6
+      },
+      "context_window": 1000000,
+      "tools_calling": true,
+      "reasoning": true,
+      "stream": true,
+      "availability_last_hour_percent": 100.0,
+      "usage_based_only": true
+    },
+    {
+      "id": "deepseek-v4-pro",
+      "tier": "pro",
+      "pricing": {
+        "input": 1.11,
+        "output": 3.33
+      },
+      "context_window": 1000000,
+      "tools_calling": true,
+      "reasoning": false,
+      "stream": true,
+      "availability_last_hour_percent": 98.59,
+      "usage_based_only": true
+    },
+    {
+      "id": "gemini-3-flash",
+      "tier": "pro",
+      "pricing": {
+        "input": 0.03,
+        "output": 0.08
+      },
+      "context_window": 1048576,
+      "tools_calling": true,
+      "reasoning": true,
+      "stream": true,
+      "availability_last_hour_percent": 100.0,
+      "usage_based_only": true
+    },
+    {
+      "id": "gemini-3.1-flash-lite",
+      "tier": "pro",
+      "pricing": {
+        "input": 0.02,
+        "output": 0.04
+      },
+      "context_window": 256000,
+      "tools_calling": true,
+      "reasoning": false,
+      "stream": true,
+      "availability_last_hour_percent": 100.0,
+      "usage_based_only": true
+    },
+    {
+      "id": "gemini-3.7-flash",
+      "tier": "pro",
+      "pricing": {
+        "input": 0.06,
+        "output": 0.3
+      },
+      "context_window": 1000000,
+      "tools_calling": true,
+      "reasoning": false,
+      "stream": true,
+      "availability_last_hour_percent": 100.0,
+      "usage_based_only": true
+    },
+    {
+      "id": "gemini-3.8-flash-high",
+      "tier": "pro",
+      "pricing": {
+        "input": 0.05,
+        "output": 0.15
+      },
+      "context_window": 1000000,
+      "tools_calling": true,
+      "reasoning": true,
+      "stream": true,
+      "availability_last_hour_percent": 100.0,
+      "usage_based_only": true
+    },
+    {
+      "id": "gemini-omni-flash",
+      "tier": "pro",
+      "pricing": {
+        "input": null,
+        "output": null
+      },
+      "context_window": null,
+      "tools_calling": false,
+      "reasoning": false,
+      "stream": false,
+      "availability_last_hour_percent": 100.0,
+      "usage_based_only": true
+    },
+    {
+      "id": "gemma4:31b",
+      "tier": "pro",
+      "pricing": {
+        "input": 0.07,
+        "output": 0.23
+      },
+      "context_window": 262000,
+      "tools_calling": true,
+      "reasoning": false,
+      "stream": true,
+      "availability_last_hour_percent": 100.0,
+      "usage_based_only": true
+    },
+    {
+      "id": "glm-5.3",
+      "tier": "pro",
+      "pricing": {
+        "input": 0.5,
+        "output": 2.0
+      },
+      "context_window": 1000000,
+      "tools_calling": true,
+      "reasoning": true,
+      "stream": true,
+      "availability_last_hour_percent": 100.0,
+      "usage_based_only": true
+    },
+    {
+      "id": "glm-5.3-flash",
+      "tier": "pro",
+      "pricing": {
+        "input": 0.15,
+        "output": 0.55
+      },
+      "context_window": 1048576,
+      "tools_calling": true,
+      "reasoning": true,
+      "stream": true,
+      "availability_last_hour_percent": 100.0,
+      "usage_based_only": true
+    },
+    {
+      "id": "gpt-5.5",
+      "tier": "pro",
+      "pricing": {
+        "input": 0.2,
+        "output": 1.0
+      },
+      "context_window": 1050000,
+      "tools_calling": true,
+      "reasoning": true,
+      "stream": true,
+      "availability_last_hour_percent": 89.58,
+      "usage_based_only": true
+    },
+    {
+      "id": "gpt-5.6-luna",
+      "tier": "pro",
+      "pricing": {
+        "input": 0.45,
+        "output": 0.58
+      },
+      "context_window": null,
+      "tools_calling": true,
+      "reasoning": true,
+      "stream": true,
+      "availability_last_hour_percent": 100.0,
+      "usage_based_only": true
+    },
+    {
+      "id": "gpt-5.6-sol",
+      "tier": "pro",
+      "pricing": {
+        "input": 1.92,
+        "output": 5.4
+      },
+      "context_window": 1000000,
+      "tools_calling": true,
+      "reasoning": true,
+      "stream": true,
+      "availability_last_hour_percent": 66.67,
+      "usage_based_only": true
+    },
+    {
+      "id": "gpt-5.6-terra",
+      "tier": "pro",
+      "pricing": {
+        "input": 0.24,
+        "output": 1.0
+      },
+      "context_window": 1000000,
+      "tools_calling": true,
+      "reasoning": true,
+      "stream": true,
+      "availability_last_hour_percent": 100.0,
+      "usage_based_only": true
+    },
+    {
+      "id": "gpt-6-astra",
+      "tier": "pro",
+      "pricing": {
+        "input": 5.0,
+        "output": 10.0
+      },
+      "context_window": 1000000,
+      "tools_calling": true,
+      "reasoning": true,
+      "stream": true,
+      "availability_last_hour_percent": 0.0,
+      "usage_based_only": true
+    },
+    {
+      "id": "gpt-image-2",
+      "tier": "pro",
+      "pricing": {
+        "input": null,
+        "output": null
+      },
+      "context_window": null,
+      "tools_calling": true,
+      "reasoning": true,
+      "stream": true,
+      "availability_last_hour_percent": 100.0,
+      "usage_based_only": true
+    },
+    {
+      "id": "grok-4.5",
+      "tier": "pro",
+      "pricing": {
+        "input": 0.3,
+        "output": 1.0
+      },
+      "context_window": 500000,
+      "tools_calling": true,
+      "reasoning": false,
+      "stream": true,
+      "availability_last_hour_percent": 100.0,
+      "usage_based_only": true
+    },
+    {
+      "id": "grok-4.6",
+      "tier": "pro",
+      "pricing": {
+        "input": 0.4,
+        "output": 0.5
+      },
+      "context_window": 500000,
+      "tools_calling": true,
+      "reasoning": true,
+      "stream": true,
+      "availability_last_hour_percent": 100.0,
+      "usage_based_only": true
+    },
+    {
+      "id": "kimi-k3",
+      "tier": "pro",
+      "pricing": {
+        "input": 2.0,
+        "output": 10.0
+      },
+      "context_window": 1000000,
+      "tools_calling": true,
+      "reasoning": true,
+      "stream": true,
+      "availability_last_hour_percent": 100.0,
+      "usage_based_only": true
+    },
+    {
+      "id": "kling-v3.0-pro",
+      "tier": "pro",
+      "pricing": {
+        "input": null,
+        "output": null
+      },
+      "context_window": null,
+      "tools_calling": false,
+      "reasoning": false,
+      "stream": false,
+      "availability_last_hour_percent": 100.0,
+      "usage_based_only": true
+    },
+    {
+      "id": "kling-v3.0-turbo",
+      "tier": "pro",
+      "pricing": {
+        "input": null,
+        "output": null
+      },
+      "context_window": null,
+      "tools_calling": false,
+      "reasoning": false,
+      "stream": false,
+      "availability_last_hour_percent": 100.0,
+      "usage_based_only": true
+    },
+    {
+      "id": "llama-4-maverick",
+      "tier": "pro",
+      "pricing": {
+        "input": 0.19,
+        "output": 0.75
+      },
+      "context_window": 1048576,
+      "tools_calling": true,
+      "reasoning": false,
+      "stream": true,
+      "availability_last_hour_percent": 100.0,
+      "usage_based_only": true
+    },
+    {
+      "id": "minimax-m2.7",
+      "tier": "turbo",
+      "pricing": {
+        "input": 0.03,
+        "output": 0.05
+      },
+      "context_window": 180000,
+      "tools_calling": true,
+      "reasoning": true,
+      "stream": false,
+      "availability_last_hour_percent": 77.89,
+      "usage_based_only": false
+    },
+    {
+      "id": "mistral-Nemo-Instruct-2407",
+      "tier": "turbo",
+      "pricing": {
+        "input": 0.03,
+        "output": 0.03
+      },
+      "context_window": 128000,
+      "tools_calling": false,
+      "reasoning": false,
+      "stream": true,
+      "availability_last_hour_percent": 99.86,
+      "usage_based_only": false
+    },
+    {
+      "id": "mistral-Small-24B-Instruct-2501",
+      "tier": "pro",
+      "pricing": {
+        "input": 0.06,
+        "output": 0.08
+      },
+      "context_window": 32000,
+      "tools_calling": false,
+      "reasoning": false,
+      "stream": true,
+      "availability_last_hour_percent": 100.0,
+      "usage_based_only": true
+    },
+    {
+      "id": "seed-2.0-mini",
+      "tier": "pro",
+      "pricing": {
+        "input": 0.1,
+        "output": 0.4
+      },
+      "context_window": 250000,
+      "tools_calling": true,
+      "reasoning": false,
+      "stream": true,
+      "availability_last_hour_percent": 100.0,
+      "usage_based_only": true
+    },
+    {
+      "id": "seedance-2.0",
+      "tier": "pro",
+      "pricing": {
+        "input": null,
+        "output": null
+      },
+      "context_window": null,
+      "tools_calling": false,
+      "reasoning": false,
+      "stream": false,
+      "availability_last_hour_percent": 100.0,
+      "usage_based_only": true
+    },
+    {
+      "id": "seedance-2.0-fast",
+      "tier": "pro",
+      "pricing": {
+        "input": null,
+        "output": null
+      },
+      "context_window": null,
+      "tools_calling": false,
+      "reasoning": false,
+      "stream": false,
+      "availability_last_hour_percent": 100.0,
+      "usage_based_only": true
+    },
+    {
+      "id": "seedance-2.0-mini",
+      "tier": "pro",
+      "pricing": {
+        "input": null,
+        "output": null
+      },
+      "context_window": null,
+      "tools_calling": false,
+      "reasoning": false,
+      "stream": false,
+      "availability_last_hour_percent": 100.0,
+      "usage_based_only": true
+    }
+  ]
+}

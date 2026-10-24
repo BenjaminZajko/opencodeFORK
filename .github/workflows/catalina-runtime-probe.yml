@@ -1,0 +1,66 @@
+name: Catalina runtime diagnosis
+
+on:
+  push:
+    branches: [catalina-runtime-probe]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  native-intel:
+    runs-on: macos-15-intel
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.4.2"
+      - name: Install source dependencies without lifecycle scripts
+        run: bun install --frozen-lockfile --ignore-scripts
+      - name: Install pinned diagnostic dependencies
+        working-directory: distribution/catalina-probe
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Bundle the compatibility experiment
+        id: bundle
+        working-directory: distribution/catalina-probe
+        run: bun build.ts
+      - name: Fetch checksum-verified historical runtime
+        id: runtime
+        run: python3 distribution/catalina-probe/fetch-runtime.py
+      - name: Check Catalina timezone and number formatting without newer ICU APIs
+        run: python3 distribution/catalina-probe/test-timezone.py distribution/catalina-probe/results/timezone.json
+      - name: Check runtime adapters
+        working-directory: distribution/catalina-probe
+        run: runtime/bun --no-install output/runtime-adapters-test.js
+      - name: Check bounded npm metadata cache
+        working-directory: distribution/catalina-probe
+        run: runtime/bun --no-install output/npm-cache-legacy.js
+      - name: Check parser worker and syntax highlighting
+        working-directory: distribution/catalina-probe
+        run: |
+          temporary=$(mktemp -d)
+          trap 'rm -rf "$temporary"' EXIT
+          runtime/bun --no-install output/syntax-legacy.js "$temporary"
+      - name: Check application and fake-model workflows on native Intel
+        run: python3 script/smoke-olivecode.py "$PWD/distribution/catalina-probe/output/olivecode-probe"
+      - name: Prepare current-runtime control
+        working-directory: distribution/catalina-probe
+        shell: bash
+        run: |
+          printf '#!/bin/sh\nprobe_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)\nexec bun --no-install "$probe_dir/bootstrap.js" "$@"\n' > output/olivecode-current
+          chmod +x output/olivecode-current
+      - name: Check current-runtime terminal control
+        run: python3 distribution/catalina-probe/terminal-check.py distribution/catalina-probe/output/olivecode-current distribution/catalina-probe/results/current-runtime.json
+      - name: Check historical runtime on native Intel
+        if: ${{ !cancelled() && steps.bundle.outcome == 'success' && steps.runtime.outcome == 'success' }}
+        run: python3 distribution/catalina-probe/terminal-check.py distribution/catalina-probe/output/olivecode-probe distribution/catalina-probe/results/historical-runtime.json
+      - name: Preserve diagnostic reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-intel-runtime-diagnosis
+          path: distribution/catalina-probe/results/
+          retention-days: 7
+          if-no-files-found: ignore

@@ -26,6 +26,7 @@ import { InstanceStore } from "@/project/instance-store"
 import { Project } from "@/project/project"
 import { Vcs } from "@/project/vcs"
 import { ProviderAuth } from "@/provider/auth"
+import { ProviderCooldown } from "@/provider/cooldown"
 import { Provider } from "@/provider/provider"
 import { Question } from "@/question"
 import { SessionCompaction } from "@/session/compaction"
@@ -90,6 +91,7 @@ import { fileHandlers } from "./handlers/file"
 import { globalHandlers } from "./handlers/global"
 import { instanceHandlers } from "./handlers/instance"
 import { mcpHandlers } from "./handlers/mcp"
+import { onboardingHandlers } from "./handlers/onboarding"
 import { permissionHandlers } from "./handlers/permission"
 import { projectHandlers } from "./handlers/project"
 import { projectCopyHandlers } from "./handlers/project-copy"
@@ -158,6 +160,7 @@ const instanceApiRoutes = HttpApiBuilder.layer(InstanceHttpApi).pipe(
     fileHandlers,
     instanceHandlers,
     mcpHandlers,
+    onboardingHandlers,
     projectHandlers,
     projectCopyHandlers,
     ptyHandlers,
@@ -225,6 +228,7 @@ const app = LayerNode.group([
   ModelsDev.node,
   Provider.node,
   ProviderAuth.node,
+  ProviderCooldown.node,
   Agent.node,
   Skill.node,
   Discovery.node,

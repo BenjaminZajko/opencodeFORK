@@ -113,6 +113,18 @@ import type {
   McpStatusResponses,
   ModelRef,
   MoveSessionDestination,
+  OnboardingDefaultErrors,
+  OnboardingDefaultResponses,
+  OnboardingDeleteModelErrors,
+  OnboardingDeleteModelResponses,
+  OnboardingLocalModelErrors,
+  OnboardingLocalModelResponses,
+  OnboardingOllamaErrors,
+  OnboardingOllamaResponses,
+  OnboardingPullErrors,
+  OnboardingPullResponses,
+  OnboardingRecommendationErrors,
+  OnboardingRecommendationResponses,
   OutputFormat,
   Part as Part2,
   PartDeleteErrors,
@@ -145,6 +157,8 @@ import type {
   PromptInput,
   ProviderAuthErrors,
   ProviderAuthResponses,
+  ProviderCooldownsErrors,
+  ProviderCooldownsResponses,
   ProviderListErrors,
   ProviderListResponses,
   ProviderOauthAuthorizeErrors,
@@ -2527,6 +2541,226 @@ export class Mcp extends HeyApiClient {
   }
 }
 
+export class Onboarding extends HeyApiClient {
+  /**
+   * Get onboarding recommendation
+   *
+   * Detect host hardware and recommend a local Ollama model and a free cloud fallback.
+   */
+  public recommendation<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      workspace?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<
+      OnboardingRecommendationResponses,
+      OnboardingRecommendationErrors,
+      ThrowOnError
+    >({
+      url: "/onboarding/recommendation",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Check Ollama status
+   *
+   * Check whether Ollama is installed and which models are pulled.
+   */
+  public ollama<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      workspace?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<OnboardingOllamaResponses, OnboardingOllamaErrors, ThrowOnError>({
+      url: "/onboarding/ollama",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Delete one installed Ollama model
+   */
+  public deleteModel<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      workspace?: string
+      model?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+            { in: "body", key: "model" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).delete<
+      OnboardingDeleteModelResponses,
+      OnboardingDeleteModelErrors,
+      ThrowOnError
+    >({
+      url: "/onboarding/local-model",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Inspect a downloaded local model
+   */
+  public localModel<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      workspace?: string
+      model?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+            { in: "body", key: "model" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<
+      OnboardingLocalModelResponses,
+      OnboardingLocalModelErrors,
+      ThrowOnError
+    >({
+      url: "/onboarding/local-model",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Pull an Ollama model
+   *
+   * Stream `ollama pull` progress as server-sent events.
+   */
+  public pull<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      workspace?: string
+      model?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+            { in: "body", key: "model" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).sse.post<OnboardingPullResponses, OnboardingPullErrors, ThrowOnError>({
+      url: "/onboarding/pull",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Resolve ranked default model
+   *
+   * Pick the best fallback-catalog model for the connected providers, no browsing required.
+   */
+  public default<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      workspace?: string
+      connected?: Array<string>
+      preferredTier?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+            { in: "body", key: "connected" },
+            { in: "body", key: "preferredTier" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<OnboardingDefaultResponses, OnboardingDefaultErrors, ThrowOnError>({
+      url: "/onboarding/default",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+}
+
 export class Project extends HeyApiClient {
   /**
    * List all projects
@@ -3348,6 +3582,36 @@ export class Provider extends HeyApiClient {
     )
     return (options?.client ?? this.client).get<ProviderAuthResponses, ProviderAuthErrors, ThrowOnError>({
       url: "/provider/auth",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * List active provider cooldowns
+   *
+   * List provider+model pairs currently cooling down after a rate limit (429). Expired entries are omitted.
+   */
+  public cooldowns<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      workspace?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<ProviderCooldownsResponses, ProviderCooldownsErrors, ThrowOnError>({
+      url: "/provider/cooldowns",
       ...options,
       ...params,
     })
@@ -7165,6 +7429,11 @@ export class OpencodeClient extends HeyApiClient {
   private _mcp?: Mcp
   get mcp(): Mcp {
     return (this._mcp ??= new Mcp({ client: this.client }))
+  }
+
+  private _onboarding?: Onboarding
+  get onboarding(): Onboarding {
+    return (this._onboarding ??= new Onboarding({ client: this.client }))
   }
 
   private _project?: Project

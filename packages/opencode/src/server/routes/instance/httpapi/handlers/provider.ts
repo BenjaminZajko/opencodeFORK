@@ -1,4 +1,6 @@
+import { freeModel, freeProvider } from "@opencode-ai/core/olivecode/models"
 import { ProviderAuth } from "@/provider/auth"
+import { ProviderCooldown } from "@/provider/cooldown"
 import { Config } from "@/config/config"
 import { ModelsDev } from "@opencode-ai/core/models-dev"
 import { Provider } from "@/provider/provider"
@@ -38,6 +40,7 @@ export const providerHandlers = HttpApiBuilder.group(InstanceHttpApi, "provider"
     const provider = yield* Provider.Service
     const svc = yield* ProviderAuth.Service
     const authStore = yield* Auth.Service
+    const cooldowns = yield* ProviderCooldown.Service
 
     const list = Effect.fn("ProviderHttpApi.list")(function* () {
       const config = yield* cfg.get()
@@ -46,7 +49,7 @@ export const providerHandlers = HttpApiBuilder.group(InstanceHttpApi, "provider"
       const enabled = config.enabled_providers ? new Set(config.enabled_providers) : undefined
       const filtered: Record<string, (typeof all)[string]> = {}
       for (const [key, value] of Object.entries(all)) {
-        if ((enabled ? enabled.has(key) : true) && !disabled.has(key)) filtered[key] = value
+        if ((key === "ollama" || freeProvider(key)) && (enabled ? enabled.has(key) : true) && !disabled.has(key)) filtered[key] = value
       }
       const connected = yield* provider.list()
       const credentials = yield* authStore.all().pipe(Effect.orDie)
@@ -54,6 +57,9 @@ export const providerHandlers = HttpApiBuilder.group(InstanceHttpApi, "provider"
         mapValues(filtered, (item) => Provider.fromModelsDevProvider(item)),
         connected,
       )
+      for (const item of Object.values(providers)) {
+        item.models = Object.fromEntries(Object.entries(item.models).filter(([id, model]) => freeModel(item.id, id, model)))
+      }
       return {
         all: Object.values(providers).map(Provider.toPublicInfo),
         default: Provider.defaultModelIDs(providers),
@@ -62,7 +68,11 @@ export const providerHandlers = HttpApiBuilder.group(InstanceHttpApi, "provider"
     })
 
     const auth = Effect.fn("ProviderHttpApi.auth")(function* () {
-      return yield* svc.methods()
+      return Object.fromEntries(Object.entries(yield* svc.methods()).filter(([id]) => freeProvider(id)))
+    })
+
+    const cooldownList = Effect.fn("ProviderHttpApi.cooldowns")(function* () {
+      return yield* cooldowns.list()
     })
 
     const authorize = Effect.fn("ProviderHttpApi.authorize")(function* (ctx: {
@@ -110,6 +120,7 @@ export const providerHandlers = HttpApiBuilder.group(InstanceHttpApi, "provider"
     return handlers
       .handle("list", list)
       .handle("auth", auth)
+      .handle("cooldowns", cooldownList)
       .handleRaw("authorize", authorizeRaw)
       .handle("callback", callback)
   }),

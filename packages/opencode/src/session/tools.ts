@@ -87,6 +87,13 @@ export const resolve = Effect.fn("SessionTools.resolve")(function* (input: {
           ruleset: Permission.merge(input.agent.permission, input.session.permission ?? []),
         })
         .pipe(Effect.orDie),
+    askWithReceipt: (req) => {
+      const request = { ...req, sessionID: input.session.id,
+        tool: { messageID: input.processor.message.id, callID: options.toolCallId },
+        ruleset: Permission.merge(input.agent.permission, input.session.permission ?? []),
+      }
+      return (permission.askWithReceipt ? permission.askWithReceipt(request) : permission.ask(request).pipe(Effect.as(false))).pipe(Effect.orDie)
+    },
   })
 
   for (const item of yield* registry.tools({
@@ -132,6 +139,8 @@ export const resolve = Effect.fn("SessionTools.resolve")(function* (input: {
       },
     })
   }
+
+  if (["computer", "computer_background", "computer_background_mac", "desktop"].includes(input.agent.name)) return tools
 
   const hasMcpResourceServer = Object.values(yield* mcp.clients()).some(
     (client) => !!client.getServerCapabilities()?.resources,

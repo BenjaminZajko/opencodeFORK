@@ -1,3 +1,4 @@
+import { computerAction } from "../../util/computer-action"
 import { createStore } from "solid-js/store"
 import { dirname } from "node:path"
 import { createMemo, For, Match, Show, Switch } from "solid-js"
@@ -140,12 +141,19 @@ export function PermissionPrompt(props: { request: PermissionRequest; directory?
           title="Always allow"
           body={
             <Switch>
+              <Match when={["browser", "desktop"].includes(props.request.permission)}>
+                <box paddingLeft={1} gap={1}>
+                  <text fg={theme.text}>Allow computer actions automatically in this chat until OliveCode restarts.</text>
+                  <text fg={theme.textMuted}>{props.request.permission === "desktop" ? "This reads the active app window and controls your actual cursor and keyboard. Keep private apps closed." : "This includes tabs, clicks and editing fields. Clicks can submit forms or change site data."}</text>
+                  <text fg={theme.textMuted}>Screenshots still ask separately. Private fields stay manual. Stop remains available.</text>
+                </box>
+              </Match>
               <Match when={props.request.always.length === 1 && props.request.always[0] === "*"}>
-                <TextBody title={"This will allow " + props.request.permission + " until OpenCode is restarted."} />
+                <TextBody title={"This will allow " + props.request.permission + " until OliveCode is restarted."} />
               </Match>
               <Match when={true}>
                 <box paddingLeft={1} gap={1}>
-                  <text fg={theme.textMuted}>This will allow the following patterns until OpenCode is restarted</text>
+                  <text fg={theme.textMuted}>This will allow the following patterns until OliveCode is restarted</text>
                   <box>
                     <For each={props.request.always}>
                       {(pattern) => (
@@ -195,6 +203,17 @@ export function PermissionPrompt(props: { request: PermissionRequest; directory?
           const info = () => {
             const permission = props.request.permission
             const data = input()
+
+            if (["browser", "browser_screenshot", "desktop", "desktop_screenshot"].includes(permission)) {
+              return { icon: "↗", title: `${permission.startsWith("desktop") ? "Desktop" : "Browser"} · ${computerAction({ ...props.request.metadata, ...data })}`, body: <box paddingLeft={1} gap={1}>
+                <text fg={theme.text}>{String(props.request.metadata?.app ?? props.request.metadata?.url ?? data.url ?? (permission.startsWith("desktop") ? "Active app window" : "Current page"))}</text>
+                <Show when={props.request.metadata?.label}><text fg={theme.text}>{String(props.request.metadata?.label ?? "")}</text></Show>
+                <Show when={props.request.metadata?.destination}><text fg={theme.text}>To: {String(props.request.metadata?.destination ?? "")}</text></Show>
+                <Show when={typeof props.request.metadata?.x === "number" && typeof props.request.metadata?.y === "number"}><text fg={theme.text}>Window position: {String(props.request.metadata?.x)}, {String(props.request.metadata?.y)}</text></Show>
+                <Show when={typeof data.text === "string"}><text fg={theme.text}>{String(data.text ?? "").slice(0, 1200)}</text></Show>
+                <text fg={theme.textMuted}>{String(props.request.metadata?.notice ?? "Allow only the intended browser action.")}</text>
+              </box> }
+            }
 
             if (permission === "edit") {
               const raw = props.request.metadata?.filepath
@@ -402,7 +421,7 @@ export function PermissionPrompt(props: { request: PermissionRequest; directory?
               title="Permission required"
               header={header()}
               body={current.body}
-              options={{ once: "Allow once", always: "Allow always", reject: "Reject" }}
+              options={["browser_screenshot", "desktop_screenshot"].includes(props.request.permission) ? { once: "Allow once", reject: "Reject" } : { once: "Allow once", always: "Allow always", reject: "Reject" }}
               escapeKey="reject"
               fullscreen
               onSelect={(option) => {

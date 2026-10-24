@@ -1,3 +1,4 @@
+import { computerAction } from "../../util/computer-action"
 import {
   batch,
   createContext,
@@ -26,6 +27,8 @@ import { Spinner } from "../../component/spinner"
 import { createSyntaxStyleMemo, generateSubtleSyntax, selectedForeground, useTheme } from "../../context/theme"
 import { BoxRenderable, ScrollBoxRenderable, addDefaultParsers, TextAttributes, RGBA } from "@opentui/core"
 import { Prompt, type PromptRef } from "../../component/prompt"
+import { Logo } from "../../component/logo"
+import { SponsorPlacement } from "../../component/sponsor-placement"
 import type {
   AssistantMessage,
   Part,
@@ -69,6 +72,7 @@ import { DialogExportOptions } from "../../ui/dialog-export-options"
 import * as Model from "../../util/model"
 import { formatTranscript } from "../../util/transcript"
 import { sessionEpilogue } from "../../util/presentation"
+import { ResponseTurn } from "../../util/response-turn"
 import { setPreLayoutSiblingMargin } from "../../util/layout"
 import { useTuiConfig } from "../../config"
 import { useClipboard } from "../../context/clipboard"
@@ -76,7 +80,6 @@ import { nextThinkingMode, reasoningSummary, useThinkingMode, type ThinkingMode 
 import { getScrollAcceleration } from "../../util/scroll"
 import { collapseToolOutput } from "../../util/collapse-tool-output"
 import { usePluginRuntime } from "../../plugin/runtime"
-import { DialogRetryAction } from "../../component/dialog-retry-action"
 import { getRevertDiffFiles } from "../../util/revert-diff"
 import { OPENCODE_BASE_MODE, useBindings, useCommandShortcut, useOpencodeKeymap } from "../../keymap"
 import { usePathFormatter } from "../../context/path-format"
@@ -84,33 +87,7 @@ import { LocationProvider } from "../../context/location"
 
 addDefaultParsers(parsers.parsers)
 
-const GO_UPSELL_FREE_TIER_LAST_SEEN_AT = "go_upsell_last_seen_at"
-const GO_UPSELL_FREE_TIER_DONT_SHOW = "go_upsell_dont_show"
-const GO_UPSELL_ACCOUNT_RATE_LIMIT_LAST_SEEN_AT = "go_upsell_account_rate_limit_last_seen_at"
-const GO_UPSELL_ACCOUNT_RATE_LIMIT_DONT_SHOW = "go_upsell_account_rate_limit_dont_show"
-const GO_UPSELL_WINDOW = 86_400_000 // 24 hrs
-const GO_UPSELL_PROVIDERS = new Set(["opencode", "opencode-go"])
-
 export const alwaysSeparate = new WeakSet<BoxRenderable>()
-
-type RetryAction = Extract<SessionStatus, { type: "retry" }>["action"]
-
-function goUpsellKeys(action: RetryAction) {
-  if (!action) return
-  if (!GO_UPSELL_PROVIDERS.has(action.provider)) return
-  if (action.reason === "free_tier_limit") {
-    return {
-      lastSeenAt: GO_UPSELL_FREE_TIER_LAST_SEEN_AT,
-      dontShow: GO_UPSELL_FREE_TIER_DONT_SHOW,
-    }
-  }
-  if (action.reason === "account_rate_limit") {
-    return {
-      lastSeenAt: GO_UPSELL_ACCOUNT_RATE_LIMIT_LAST_SEEN_AT,
-      dontShow: GO_UPSELL_ACCOUNT_RATE_LIMIT_DONT_SHOW,
-    }
-  }
-}
 
 const sessionBindingCommands = [
   "session.share",
@@ -216,6 +193,23 @@ export function Session() {
     const index = messages().findIndex((message) => message.id === messageID)
     return index === -1 ? messages() : messages().slice(0, index)
   }
+  const responseTurns = createMemo(() => ResponseTurn.responseTurns(messagesBeforeRevert(), sync.data.part))
+  const finishedResponses = createMemo(() => {
+    const turns = responseTurns()
+    const busy = ["busy", "retry"].includes(sync.data.session_status[route.sessionID]?.type ?? "")
+    return turns.filter((turn) => turn.messages.length > 0 &&
+      ResponseTurn.turnFinished(turn, turn.id === turns.at(-1)?.id && busy))
+  })
+  const firstResponses = createMemo(() => new Map(responseTurns()
+    .filter((turn) => turn.messages.length > 0)
+    .map((turn) => [turn.messages[0].id, turn] as const)))
+  const [expandedTurns, setExpandedTurns] = createSignal<Set<string>>(new Set())
+  const toggleTurn = (id: string) => setExpandedTurns((previous) => {
+    const next = new Set(previous)
+    if (next.has(id)) next.delete(id)
+    else next.add(id)
+    return next
+  })
   const foregroundTasks = createMemo(() =>
     sync.data.capabilities.experimentalBackgroundSubagents
       ? messages().flatMap((message) =>
@@ -253,7 +247,6 @@ export function Session() {
   })
 
   const dimensions = useTerminalDimensions()
-  const [sidebar, setSidebar] = kv.signal<"auto" | "hide">("sidebar", "auto")
   const [sidebarOpen, setSidebarOpen] = createSignal(false)
   const [conceal, setConceal] = createSignal(true)
   const thinking = useThinkingMode()
@@ -270,9 +263,7 @@ export function Session() {
   const wide = createMemo(() => dimensions().width > 120)
   const sidebarVisible = createMemo(() => {
     if (session()?.parentID) return false
-    if (sidebarOpen()) return true
-    if (sidebar() === "auto" && wide()) return true
-    return false
+    return sidebarOpen()
   })
   const showTimestamps = createMemo(() => timestamps() === "show")
   const contentWidth = createMemo(() => dimensions().width - (sidebarVisible() ? 42 : 0) - 4)
@@ -353,26 +344,6 @@ export function Session() {
   const keymap = useOpencodeKeymap()
   const dialog = useDialog()
   const renderer = useRenderer()
-
-  event.on("session.status", (evt) => {
-    if (evt.properties.sessionID !== route.sessionID) return
-    if (evt.properties.status.type !== "retry") return
-    if (!evt.properties.status.action) return
-    if (dialog.stack.length > 0) return
-
-    const keys = goUpsellKeys(evt.properties.status.action)
-    if (!keys) return
-
-    const seen = kv.get(keys.lastSeenAt)
-    if (typeof seen === "number" && Date.now() - seen < GO_UPSELL_WINDOW) return
-
-    if (kv.get(keys.dontShow)) return
-
-    void DialogRetryAction.show(dialog, evt.properties.status.action).then((dontShowAgain) => {
-      if (dontShowAgain) kv.set(keys.dontShow, true)
-      kv.set(keys.lastSeenAt, Date.now())
-    })
-  })
 
   // Helper: Find next visible message boundary in direction
   const findNextVisibleMessage = (direction: "next" | "prev"): string | null => {
@@ -468,7 +439,7 @@ export function Session() {
       value: "session.share",
       suggested: route.type === "session",
       category: "Session",
-      enabled: sync.data.config.share !== "disabled",
+      enabled: false,
       slash: {
         name: "share",
       },
@@ -588,7 +559,7 @@ export function Session() {
       title: "Unshare session",
       value: "session.unshare",
       category: "Session",
-      enabled: !!session()?.share?.url,
+      enabled: false,
       slash: {
         name: "unshare",
       },
@@ -670,15 +641,11 @@ export function Session() {
       },
     },
     {
-      title: sidebarVisible() ? "Hide sidebar" : "Show sidebar",
+      title: sidebarVisible() ? "Hide session details" : "Show session details",
       value: "session.sidebar.toggle",
       category: "Session",
       run: () => {
-        batch(() => {
-          const isVisible = sidebarVisible()
-          setSidebar(() => (isVisible ? "hide" : "auto"))
-          setSidebarOpen(!isVisible)
-        })
+        setSidebarOpen((open) => !open)
         dialog.clear()
       },
     },
@@ -727,6 +694,19 @@ export function Session() {
       category: "Session",
       run: () => {
         setShowDetails((prev) => !prev)
+        dialog.clear()
+      },
+    },
+    {
+      title: finishedResponses().some((turn) => !expandedTurns().has(turn.id))
+        ? "Show all work details" : "Hide all work details",
+      value: "session.toggle.response_details",
+      category: "Session",
+      slash: { name: "details" },
+      run: () => {
+        const turns = finishedResponses()
+        setExpandedTurns((previous) => turns.some((turn) => !previous.has(turn.id))
+          ? new Set<string>(turns.map((turn) => turn.id)) : new Set<string>())
         dialog.clear()
       },
     },
@@ -1176,6 +1156,11 @@ export function Session() {
       >
         <box flexDirection="row" flexGrow={1} minHeight={0}>
           <box flexGrow={1} minHeight={0} paddingBottom={1} paddingLeft={2} paddingRight={2} gap={1}>
+            <box backgroundColor={theme.backgroundPanel} paddingLeft={1} paddingRight={1} flexDirection="row" gap={1} flexShrink={0}>
+              <Logo compact />
+              <text fg={theme.borderSubtle}>│</text>
+              <text fg={theme.text} truncate wrapMode="none">{session()?.title ?? "New task"}</text>
+            </box>
             <Show when={session()}>
               <scrollbox
                 ref={(r) => (scroll = r)}
@@ -1265,35 +1250,47 @@ export function Session() {
                         <></>
                       </Match>
                       <Match when={message.role === "user"}>
-                        <UserMessage
-                          index={index()}
-                          onMouseUp={() => {
-                            if (renderer.getSelection()?.getSelectedText()) return
-                            dialog.replace(() => (
-                              <DialogMessage
-                                messageID={message.id}
-                                sessionID={route.sessionID}
-                                setPrompt={(promptInfo) => prompt?.set(promptInfo)}
-                              />
-                            ))
-                          }}
-                          message={message as UserMessage}
-                          parts={sync.data.part[message.id] ?? []}
-                          pending={pending()}
-                        />
+                        <Show when={(sync.data.part[message.id] ?? []).some((part) =>
+                          (part.type === "text" && !part.synthetic && !part.ignored) || part.type === "file")}>
+                          <UserMessage
+                            index={index()}
+                            onMouseUp={() => {
+                              if (renderer.getSelection()?.getSelectedText()) return
+                              dialog.replace(() => (
+                                <DialogMessage
+                                  messageID={message.id}
+                                  sessionID={route.sessionID}
+                                  setPrompt={(promptInfo) => prompt?.set(promptInfo)}
+                                />
+                              ))
+                            }}
+                            message={message as UserMessage}
+                            parts={sync.data.part[message.id] ?? []}
+                            pending={pending()}
+                          />
+                        </Show>
                       </Match>
                       <Match when={message.role === "assistant"}>
-                        <AssistantMessage
-                          last={lastAssistant()?.id === message.id}
-                          message={message as AssistantMessage}
-                          parts={sync.data.part[message.id] ?? []}
-                        />
+                        <Show when={firstResponses().get(message.id)}>
+                          {(turn) => (
+                            <ResponseMessage
+                              turn={turn()}
+                              current={responseTurns().at(-1)?.id === turn().id}
+                              busy={sync.data.session_status[route.sessionID]?.type === "busy" ||
+                                sync.data.session_status[route.sessionID]?.type === "retry"}
+                              expanded={expandedTurns().has(turn().id)}
+                              onToggle={() => toggleTurn(turn().id)}
+                              lastAssistantID={lastAssistant()?.id}
+                            />
+                          )}
+                        </Show>
                       </Match>
                     </Switch>
                   )}
                 </For>
               </scrollbox>
               <box flexShrink={0}>
+                <SponsorPlacement placement="chat" />
                 <Show when={permissions().length > 0}>
                   <PermissionPrompt
                     request={permissions()[0]}
@@ -1338,7 +1335,7 @@ export function Session() {
           <Show when={sidebarVisible()}>
             <Switch>
               <Match when={wide()}>
-                <Sidebar sessionID={route.sessionID} />
+                <Sidebar sessionID={route.sessionID} onClose={() => setSidebarOpen(false)} />
               </Match>
               <Match when={!wide()}>
                 <box
@@ -1350,7 +1347,7 @@ export function Session() {
                   alignItems="flex-end"
                   backgroundColor={RGBA.fromInts(0, 0, 0, 70)}
                 >
-                  <Sidebar sessionID={route.sessionID} />
+                  <Sidebar sessionID={route.sessionID} overlay onClose={() => setSidebarOpen(false)} />
                 </box>
               </Match>
             </Switch>
@@ -1466,7 +1463,119 @@ function UserMessage(props: {
   )
 }
 
-function AssistantMessage(props: { message: AssistantMessage; parts: Part[]; last: boolean }) {
+function ResponseMessage(props: {
+  turn: ResponseTurn.ResponseTurn
+  current: boolean
+  busy: boolean
+  expanded: boolean
+  onToggle: () => void
+  lastAssistantID?: string
+}) {
+  const ctx = use()
+  const { theme } = useTheme()
+  const sync = useSync()
+  const [hover, setHover] = createSignal(false)
+  const finished = createMemo(() => ResponseTurn.turnFinished(props.turn, props.current && props.busy))
+  const last = createMemo(() => props.turn.messages.at(-1)!)
+  const answer = createMemo(() => props.turn.messages.findLast((message) =>
+    !last().error &&
+    message.finish && !["tool-calls", "unknown"].includes(message.finish) &&
+    (sync.data.part[message.id] ?? []).some((part) => part.type === "text" && !part.ignored),
+  ) ?? last())
+  const answerModel = createMemo(() => Model.name(ctx.providers(), answer().providerID, answer().modelID))
+  const answerParts = createMemo(() => (sync.data.part[answer().id] ?? [])
+    .filter((part) => part.type === "text" && !part.ignored && !part.synthetic))
+  const hasActivity = createMemo(() => props.turn.messages.some((message) =>
+    (sync.data.part[message.id] ?? []).some((part) =>
+      part.type === "tool" || part.type === "reasoning" ||
+      (message.id !== answer().id && part.type === "text" && !part.ignored && !part.synthetic),
+    ),
+  ))
+  const duration = createMemo(() => Math.max(0, (last().time.completed ?? props.turn.started) - props.turn.started))
+
+  return (
+    <Switch>
+      <Match when={!finished()}>
+        <For each={props.turn.messages}>
+          {(message) => (
+            <AssistantMessage
+              last={props.lastAssistantID === message.id}
+              message={message}
+              parts={sync.data.part[message.id] ?? []}
+              hideFooter={props.current && props.busy}
+            />
+          )}
+        </For>
+      </Match>
+      <Match when={true}>
+        <box marginTop={1} paddingLeft={3} flexShrink={0}>
+          <box
+            onMouseOver={() => setHover(true)}
+            onMouseOut={() => setHover(false)}
+            onMouseUp={() => hasActivity() && props.onToggle()}
+            flexDirection="row"
+            border={["bottom"]}
+            borderColor={theme.border}
+          >
+            <text fg={hover() && hasActivity() ? theme.text : theme.textMuted} wrapMode="none">
+              <Show when={hasActivity()} fallback={<span style={{ fg: theme.primary }}>● </span>}>
+                <span style={{ fg: theme.primary }}>{props.expanded ? "▾ " : "▸ "}</span>
+              </Show>
+              {last().error ? "Stopped after " : "Worked for "}
+              {Locale.duration(duration())}
+              <Show when={answerModel()}>
+                <span style={{ fg: theme.textMuted }}> · {answerModel()}</span>
+              </Show>
+              {hasActivity() ? (props.expanded ? " · Hide details" : " · Show details") : ""}
+            </text>
+          </box>
+          <Show when={props.expanded && hasActivity()}>
+            <box border={["left"]} borderColor={theme.border} marginTop={1} paddingLeft={1}>
+              <For each={props.turn.messages}>
+                {(message) => (
+                  <AssistantMessage
+                    last={false}
+                    message={message}
+                    parts={(sync.data.part[message.id] ?? []).filter((part) =>
+                      message.id !== answer().id || part.type !== "text")}
+                    hideFooter
+                    hideError={message.id === answer().id}
+                    forceDetails
+                  />
+                )}
+              </For>
+            </box>
+          </Show>
+        </box>
+        <AssistantMessage
+          last={false}
+          message={answer()}
+          parts={answerParts()}
+          hideFooter
+        />
+        <Show when={!answerParts().length && !answer().error}>
+          <box paddingLeft={3} marginTop={1}>
+            <text fg={theme.textMuted}>No final response was provided.</text>
+          </box>
+        </Show>
+        <Show when={answer().error?.name === "MessageAbortedError"}>
+          <box paddingLeft={3} marginTop={1}>
+            <text fg={theme.textMuted}>Interrupted before a final response.</text>
+          </box>
+        </Show>
+      </Match>
+    </Switch>
+  )
+}
+
+function AssistantMessage(props: {
+  message: AssistantMessage
+  parts: Part[]
+  last: boolean
+  hideFooter?: boolean
+  hideError?: boolean
+  forceDetails?: boolean
+}) {
   const ctx = use()
   const local = useLocal()
   const { theme } = useTheme()
@@ -1501,6 +1610,7 @@ function AssistantMessage(props: { message: AssistantMessage; parts: Part[]; las
                 component={component()}
                 part={part as any}
                 message={props.message}
+                forceDetails={props.forceDetails}
               />
             </Show>
           )
@@ -1530,7 +1640,7 @@ function AssistantMessage(props: { message: AssistantMessage; parts: Part[]; las
           </text>
         </box>
       </Show>
-      <Show when={props.message.error && props.message.error.name !== "MessageAbortedError"}>
+      <Show when={!props.hideError && props.message.error && props.message.error.name !== "MessageAbortedError"}>
         <box
           ref={(el: BoxRenderable) => alwaysSeparate.add(el)}
           border={["left"]}
@@ -1545,32 +1655,34 @@ function AssistantMessage(props: { message: AssistantMessage; parts: Part[]; las
           <text fg={theme.textMuted}>{errorMessage(props.message.error)}</text>
         </box>
       </Show>
-      <Switch>
-        <Match when={props.last || final() || props.message.error?.name === "MessageAbortedError"}>
-          <box ref={(el: BoxRenderable) => alwaysSeparate.add(el)} paddingLeft={3}>
-            <text marginTop={1}>
-              <span
-                style={{
-                  fg:
-                    props.message.error?.name === "MessageAbortedError"
-                      ? theme.textMuted
-                      : local.agent.color(props.message.agent),
-                }}
-              >
-                ▣{" "}
-              </span>{" "}
-              <span style={{ fg: theme.text }}>{Locale.titlecase(props.message.mode)}</span>
-              <span style={{ fg: theme.textMuted }}> · {model()}</span>
-              <Show when={duration()}>
-                <span style={{ fg: theme.textMuted }}> · {Locale.duration(duration())}</span>
-              </Show>
-              <Show when={props.message.error?.name === "MessageAbortedError"}>
-                <span style={{ fg: theme.textMuted }}> · interrupted</span>
-              </Show>
-            </text>
-          </box>
-        </Match>
-      </Switch>
+      <Show when={!props.hideFooter}>
+        <Switch>
+          <Match when={props.last || final() || props.message.error?.name === "MessageAbortedError"}>
+            <box ref={(el: BoxRenderable) => alwaysSeparate.add(el)} paddingLeft={3}>
+              <text marginTop={1}>
+                <span
+                  style={{
+                    fg:
+                      props.message.error?.name === "MessageAbortedError"
+                        ? theme.textMuted
+                        : local.agent.color(props.message.agent),
+                  }}
+                >
+                  ▣{" "}
+                </span>{" "}
+                <span style={{ fg: theme.text }}>{Locale.titlecase(props.message.mode)}</span>
+                <span style={{ fg: theme.textMuted }}> · {model()}</span>
+                <Show when={duration()}>
+                  <span style={{ fg: theme.textMuted }}> · {Locale.duration(duration())}</span>
+                </Show>
+                <Show when={props.message.error?.name === "MessageAbortedError"}>
+                  <span style={{ fg: theme.textMuted }}> · interrupted</span>
+                </Show>
+              </text>
+            </box>
+          </Match>
+        </Switch>
+      </Show>
     </>
   )
 }
@@ -1706,13 +1818,14 @@ function TextPart(props: { last: boolean; part: TextPart; message: AssistantMess
 
 // Pending messages moved to individual tool pending functions
 
-function ToolPart(props: { last: boolean; part: ToolPart; message: AssistantMessage }) {
+function ToolPart(props: { last: boolean; part: ToolPart; message: AssistantMessage; forceDetails?: boolean }) {
   const ctx = use()
   const display = createMemo(() => toolDisplay(props.part.tool))
 
   // Hide tool if showDetails is false and tool completed successfully
   const shouldHide = createMemo(() => {
-    if (ctx.showDetails()) return false
+    if (props.part.metadata?.olivecodeCoordination) return false
+    if (ctx.showDetails() || props.forceDetails) return false
     if (props.part.state.status !== "completed") return false
     return true
   })
@@ -1738,6 +1851,12 @@ function ToolPart(props: { last: boolean; part: ToolPart; message: AssistantMess
   return (
     <Show when={!shouldHide()}>
       <Switch>
+        <Match when={props.part.metadata?.olivecodeCoordination}>
+          <CoordinationTool {...toolprops} />
+        </Match>
+        <Match when={["browser", "desktop"].includes(props.part.tool)}>
+          <ComputerTool {...toolprops} />
+        </Match>
         <Match when={display() === "bash"}>
           <Shell {...toolprops} />
         </Match>
@@ -1795,6 +1914,34 @@ type ToolProps = {
   output?: string
   part: ToolPart
 }
+function ComputerTool(props: ToolProps) {
+  const { theme } = useTheme()
+  const action = () => `${props.tool === "desktop" ? "Desktop" : "Browser"} · ${computerAction(props.input)}`
+  const error = () => props.part.state.status === "error" ? props.part.state.error : undefined
+  return <box>
+    <InlineTool icon={error() ? "!" : "↗"} pending={action()} failure={`${action()} failed`}
+      complete={props.part.state.status === "completed"} spinner={props.part.state.status === "running"} part={props.part}>
+      {action()}{error() ? " · failed" : ""}
+    </InlineTool>
+    <Show when={error()}><box paddingLeft={3}><text fg={theme.error}>{String(error()).slice(0, 320)}</text></box></Show>
+  </box>
+}
+function CoordinationTool(props: ToolProps) {
+  const { theme } = useTheme()
+  const [expanded, setExpanded] = createSignal(false)
+  const title = () => "title" in props.part.state ? props.part.state.title ?? "Task assistance" : "Task assistance"
+  return <box>
+    <InlineTool icon="◇" pending={title()} complete={props.part.state.status === "completed"}
+      spinner={props.part.state.status === "running"}
+      part={props.part} onClick={() => setExpanded(!expanded())}>
+      {title()}
+    </InlineTool>
+    <Show when={expanded() && props.output}>
+      <box paddingLeft={3}><text fg={theme.textMuted}>{props.output}</text></box>
+    </Show>
+  </box>
+}
+
 function GenericTool(props: ToolProps) {
   const { theme } = useTheme()
   const ctx = use()

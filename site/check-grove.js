@@ -1,0 +1,43 @@
+async page => {
+  const errors=[];
+  page.on('pageerror',error=>errors.push(String(error)));
+  await page.emulateMedia({colorScheme:'dark',reducedMotion:'no-preference'});
+  await page.setViewportSize({width:1440,height:900});
+  await page.goto('http://127.0.0.1:8765');
+  await page.waitForFunction(()=>document.querySelector('.grove-stage').dataset.motion==='running');
+  const before=await page.screenshot({clip:{x:0,y:80,width:1440,height:700}});
+  await page.waitForTimeout(350);
+  const after=await page.screenshot({clip:{x:0,y:80,width:1440,height:700}});
+  if (before.equals(after)) throw new Error('Scene is not moving');
+  await page.mouse.move(1300,300);
+  await page.waitForTimeout(350);
+  const transform=await page.locator('.grove-trees').evaluate(el=>el.style.transform);
+  if (!transform || transform.includes('translate3d(0px,0px')) throw new Error('Pointer parallax failed');
+  if (await page.locator('#motion-toggle').count()) throw new Error('Removed pause control is still present');
+  await page.screenshot({path:'docs/previews/site-grove-dark.png'});
+  await page.emulateMedia({colorScheme:'light',reducedMotion:'reduce'});
+  await page.waitForFunction(()=>document.querySelector('.grove-stage').dataset.motion==='reduced');
+  await page.waitForTimeout(250);
+  const still=await page.screenshot({clip:{x:0,y:80,width:1440,height:700}});
+  await page.waitForTimeout(350);
+  if (!still.equals(await page.screenshot({clip:{x:0,y:80,width:1440,height:700}}))) throw new Error('Reduced motion did not freeze the scene');
+  await page.screenshot({path:'docs/previews/site-grove-light.png'});
+  await page.setViewportSize({width:375,height:812});
+  await page.emulateMedia({colorScheme:'dark'});
+  await page.screenshot({path:'docs/previews/site-grove-mobile.png'});
+  await page.reload();
+  await page.waitForFunction(()=>document.querySelector('.grove-stage').dataset.motion==='reduced');
+  const fallback=await page.context().newPage();
+  await fallback.addInitScript(()=>{
+    const original=HTMLCanvasElement.prototype.getContext;
+    HTMLCanvasElement.prototype.getContext=function(type,...args){return type.startsWith('webgl') ? null : original.call(this,type,...args)};
+  });
+  await fallback.goto('http://127.0.0.1:8765');
+  await fallback.waitForFunction(()=>document.querySelector('.grove-stage').dataset.motion==='unavailable');
+  if (!(await fallback.locator('.grove-trees').isVisible())) throw new Error('Artwork fallback missing');
+  await fallback.getByRole('radio',{name:'Windows'}).check();
+  if (!(await fallback.locator('#install-command').textContent()).startsWith('irm ')) throw new Error('Fallback broke installer');
+  await fallback.close();
+  if (errors.length) throw new Error(errors.join('\n'));
+  return {passed:true,checks:['real canvas motion','pointer depth','pause control removed','reduced-motion freezes frames','reduced motion live and first load','light/dark/mobile screenshots','no WebGL fallback keeps installer working','no browser errors']};
+}

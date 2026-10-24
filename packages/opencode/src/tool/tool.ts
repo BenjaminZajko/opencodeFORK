@@ -43,6 +43,7 @@ export type Context<M extends Metadata = Metadata> = {
   messages: SessionV1.WithParts[]
   metadata(input: { title?: string; metadata?: M }): Effect.Effect<void>
   ask(input: Omit<PermissionV1.Request, "id" | "sessionID" | "tool">): Effect.Effect<void>
+  askWithReceipt?: (input: Omit<PermissionV1.Request, "id" | "sessionID" | "tool">) => Effect.Effect<boolean>
 }
 
 export interface ExecuteResult<M extends Metadata = Metadata> {

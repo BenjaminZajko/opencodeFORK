@@ -24,6 +24,7 @@ export const { use: useKV, provider: KVProvider } = createSimpleContext({
         setStore(x)
       })
       .catch((error) => {
+        if (error && typeof error === "object" && "code" in error && error.code === "ENOENT") return
         console.error("Failed to read KV state", { error })
       })
       .finally(() => {

@@ -1,3 +1,4 @@
+import { historicalObservation } from "@/computer/history"
 import { LayerNode } from "@opencode-ai/core/effect/layer-node"
 import { SessionV1 } from "@opencode-ai/core/v1/session"
 import { ConfigV1 } from "@opencode-ai/core/v1/config/config"
@@ -66,6 +67,7 @@ const serialize = (message: SessionV1.WithParts) => {
   return message.parts
     .flatMap((part) => {
       if (part.type === "text") return part.text ? [`[Assistant]: ${part.text}`] : []
+      if (part.type === "reasoning" && ["computer", "computer_background", "computer_background_mac", "desktop"].includes(message.info.agent)) return []
       if (part.type === "reasoning") return part.text ? [`[Assistant reasoning]: ${part.text}`] : []
       if (part.type !== "tool") return []
       const call = `[Assistant tool call]: ${part.tool}(${JSON.stringify(part.state.input)})`
@@ -75,7 +77,7 @@ const serialize = (message: SessionV1.WithParts) => {
         )
         const output = part.state.time.compacted
           ? "[Old tool result content cleared]"
-          : truncate([part.state.output, ...attachments].join("\n"))
+          : truncate([["desktop", "browser"].includes(part.tool) ? historicalObservation(part.state.output) : part.state.output, ...attachments].join("\n"))
         return [call, `[Tool result]: ${output}`]
       }
       if (part.state.status === "error") return [call, `[Tool error]: ${part.state.error}`]

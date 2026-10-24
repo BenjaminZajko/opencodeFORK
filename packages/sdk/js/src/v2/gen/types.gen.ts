@@ -1887,6 +1887,10 @@ export type AttachmentConfig = {
 }
 
 export type Config = {
+  collaboration?: {
+    teamwork?: boolean
+    followThrough?: boolean
+  }
   $schema?: string
   shell?: string
   logLevel?: LogLevel
@@ -2424,6 +2428,13 @@ export type McpServerNotFoundError = {
   message: string
 }
 
+export type OnboardingError = {
+  name: "BadRequest" | "OnboardingOllamaMissing"
+  data: {
+    message?: string
+  }
+}
+
 export type Project = {
   id: string
   worktree: string
@@ -2520,6 +2531,13 @@ export type ProviderAuthMethod = {
         }
       }
   >
+}
+
+export type ProviderCooldown = {
+  providerID: string
+  modelID: string
+  downUntil: number
+  reason?: string
 }
 
 export type ProviderAuthAuthorization = {
@@ -8705,6 +8723,278 @@ export type McpDisconnectResponses = {
 
 export type McpDisconnectResponse = McpDisconnectResponses[keyof McpDisconnectResponses]
 
+export type OnboardingRecommendationData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/onboarding/recommendation"
+}
+
+export type OnboardingRecommendationErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+}
+
+export type OnboardingRecommendationError = OnboardingRecommendationErrors[keyof OnboardingRecommendationErrors]
+
+export type OnboardingRecommendationResponses = {
+  /**
+   * Hardware-aware model recommendation
+   */
+  200: {
+    profile: {
+      os?: string
+      cpu?: string
+      ramGb?: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+      gpu?: string
+      poolGb: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+      diskFreeGb?: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+    }
+    primaryLocal: {
+      id: string
+      kind: "local" | "cloud"
+      score: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+      fit: string
+      reasons: Array<string>
+      needGb?: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+      name?: string
+      variant?: string
+      downloadGb?: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+      compatible?: boolean
+    }
+    primaryCloud: {
+      id: string
+      kind: "local" | "cloud"
+      score: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+      fit: string
+      reasons: Array<string>
+      needGb?: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+      name?: string
+      variant?: string
+      downloadGb?: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+      compatible?: boolean
+    }
+    primary: "local" | "cloud"
+    alternates: Array<{
+      id: string
+      kind: "local" | "cloud"
+      score: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+      fit: string
+      reasons: Array<string>
+      needGb?: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+      name?: string
+      variant?: string
+      downloadGb?: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+      compatible?: boolean
+    }>
+    explanation: string
+    catalog: Array<{
+      id: string
+      kind: "local" | "cloud"
+      score: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+      fit: string
+      reasons: Array<string>
+      needGb?: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+      name?: string
+      variant?: string
+      downloadGb?: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+      compatible?: boolean
+    }>
+    reviewed: string
+  }
+}
+
+export type OnboardingRecommendationResponse =
+  OnboardingRecommendationResponses[keyof OnboardingRecommendationResponses]
+
+export type OnboardingOllamaData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/onboarding/ollama"
+}
+
+export type OnboardingOllamaErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+}
+
+export type OnboardingOllamaError = OnboardingOllamaErrors[keyof OnboardingOllamaErrors]
+
+export type OnboardingOllamaResponses = {
+  /**
+   * Ollama presence and pulled models
+   */
+  200: {
+    installed: boolean
+    models: Array<string>
+    running: boolean
+    error?: string
+    details: Array<{
+      id: string
+      sizeGb: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+      cloud: boolean
+      quantization?: string
+      parameters?: string
+    }>
+  }
+}
+
+export type OnboardingOllamaResponse = OnboardingOllamaResponses[keyof OnboardingOllamaResponses]
+
+export type OnboardingDeleteModelData = {
+  body?: {
+    model: string
+  }
+  path?: never
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/onboarding/local-model"
+}
+
+export type OnboardingDeleteModelErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * OnboardingError
+   */
+  500: OnboardingError
+}
+
+export type OnboardingDeleteModelError = OnboardingDeleteModelErrors[keyof OnboardingDeleteModelErrors]
+
+export type OnboardingDeleteModelResponses = {
+  /**
+   * Success
+   */
+  200: boolean
+}
+
+export type OnboardingDeleteModelResponse = OnboardingDeleteModelResponses[keyof OnboardingDeleteModelResponses]
+
+export type OnboardingLocalModelData = {
+  body?: {
+    model: string
+  }
+  path?: never
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/onboarding/local-model"
+}
+
+export type OnboardingLocalModelErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * OnboardingError
+   */
+  500: OnboardingError
+}
+
+export type OnboardingLocalModelError = OnboardingLocalModelErrors[keyof OnboardingLocalModelErrors]
+
+export type OnboardingLocalModelResponses = {
+  /**
+   * Success
+   */
+  200: {
+    id: string
+    baseURL: string
+    context: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+    tools: boolean
+    reasoning: boolean
+    vision: boolean
+  }
+}
+
+export type OnboardingLocalModelResponse = OnboardingLocalModelResponses[keyof OnboardingLocalModelResponses]
+
+export type OnboardingPullData = {
+  body?: {
+    model: string
+  }
+  path?: never
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/onboarding/pull"
+}
+
+export type OnboardingPullErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * OnboardingError
+   */
+  500: OnboardingError
+}
+
+export type OnboardingPullError = OnboardingPullErrors[keyof OnboardingPullErrors]
+
+export type OnboardingPullResponses = {
+  /**
+   * Success
+   */
+  200: string
+}
+
+export type OnboardingPullResponse = OnboardingPullResponses[keyof OnboardingPullResponses]
+
+export type OnboardingDefaultData = {
+  body?: {
+    connected: Array<string>
+    preferredTier?: string
+  }
+  path?: never
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/onboarding/default"
+}
+
+export type OnboardingDefaultErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+}
+
+export type OnboardingDefaultError = OnboardingDefaultErrors[keyof OnboardingDefaultErrors]
+
+export type OnboardingDefaultResponses = {
+  /**
+   * Ranked default model for connected providers
+   */
+  200: {
+    providerID: string
+    modelID: string
+  }
+}
+
+export type OnboardingDefaultResponse = OnboardingDefaultResponses[keyof OnboardingDefaultResponses]
+
 export type ProjectListData = {
   body?: never
   path?: never
@@ -9364,6 +9654,34 @@ export type ProviderAuthResponses = {
 }
 
 export type ProviderAuthResponse = ProviderAuthResponses[keyof ProviderAuthResponses]
+
+export type ProviderCooldownsData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/provider/cooldowns"
+}
+
+export type ProviderCooldownsErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+}
+
+export type ProviderCooldownsError = ProviderCooldownsErrors[keyof ProviderCooldownsErrors]
+
+export type ProviderCooldownsResponses = {
+  /**
+   * Active provider cooldowns
+   */
+  200: Array<ProviderCooldown>
+}
+
+export type ProviderCooldownsResponse = ProviderCooldownsResponses[keyof ProviderCooldownsResponses]
 
 export type ProviderOauthAuthorizeData = {
   body?: {
