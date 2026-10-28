@@ -4,11 +4,20 @@ import { Flag } from "@opencode-ai/core/flag/flag"
 import { Installation } from "@/installation"
 import { InstallationChannel, InstallationVersion } from "@opencode-ai/core/installation/version"
 import { GlobalBus } from "@/bus/global"
+import { availableUpdate } from "@opencode-ai/core/olivecode/update"
 
 export async function upgrade() {
-  if (InstallationChannel.startsWith("olivecode")) return
   const config = await AppRuntime.runPromise(Config.Service.use((cfg) => cfg.getGlobal()))
   if (config.autoupdate === false || Flag.OPENCODE_DISABLE_AUTOUPDATE) return
+  if (InstallationChannel.startsWith("olivecode")) {
+    const version = await availableUpdate(InstallationVersion).catch(() => undefined)
+    if (version)
+      GlobalBus.emit("event", {
+        directory: "global",
+        payload: { type: Installation.Event.UpdateAvailable.type, properties: { version } },
+      })
+    return
+  }
   const method = await Installation.method()
   const latest = await Installation.latest(method).catch(() => {})
   if (!latest) return
