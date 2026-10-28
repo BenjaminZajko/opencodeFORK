@@ -4,7 +4,8 @@ import { createDefaultOpenTuiKeymap } from "@opentui/keymap/opentui"
 import { Deferred, Effect } from "effect"
 import { Global } from "@opencode-ai/core/global"
 import { Flag } from "@opencode-ai/core/flag/flag"
-import { InstallationVersion } from "@opencode-ai/core/installation/version"
+import { InstallationVersion, InstallationChannel } from "@opencode-ai/core/installation/version"
+import { releasePage } from "@opencode-ai/core/olivecode/update"
 import { ClipboardProvider, useClipboard } from "./context/clipboard"
 import { ExitProvider, useExit } from "./context/exit"
 import { EpilogueProvider } from "./context/epilogue"
@@ -22,6 +23,7 @@ import {
   onCleanup,
   batch,
   Show,
+  untrack,
 } from "solid-js"
 import { TuiPathsProvider, TuiStartupProvider, TuiTerminalEnvironmentProvider, useTuiStartup } from "./context/runtime"
 import { DialogProvider, useDialog } from "./ui/dialog"
@@ -45,6 +47,9 @@ import { DialogComputer } from "./component/dialog-computer"
 import { DialogRemote } from "./component/dialog-remote"
 import { DialogAssist } from "./component/dialog-assist"
 import { DialogSetup } from "./component/dialog-setup"
+import { DialogPrivacy } from "./component/dialog-privacy"
+import { measurementEndpoint } from "./olivecode/measurement-config"
+import { createUsageReporter } from "./olivecode/usage"
 import { useConnected } from "./component/use-connected"
 import { DialogMcp } from "./component/dialog-mcp"
 import { DialogStatus } from "./component/dialog-status"
@@ -388,6 +393,24 @@ function App(props: { onSnapshot?: () => Promise<string[]>; pluginHost: TuiPlugi
   const promptRef = usePromptRef()
   const pluginRuntime = usePluginRuntime()
   const attention = createTuiAttention({ renderer, config: tuiConfig, kv })
+  if (measurementEndpoint) {
+    const report = createUsageReporter({
+      storage: kv,
+      endpoint: measurementEndpoint,
+      version: InstallationVersion,
+      platform: process.platform,
+    })
+    createEffect(() => {
+      if (!kv.ready || !kv.get("olivecode_usage_metrics", false)) return
+      const controller = new AbortController()
+      untrack(() => void report(controller.signal))
+      const timer = setInterval(() => void report(controller.signal), 60_000)
+      onCleanup(() => {
+        controller.abort()
+        clearInterval(timer)
+      })
+    })
+  }
   const clipboard = useClipboard()
 
   const api = createTuiApi(
@@ -638,6 +661,13 @@ function App(props: { onSnapshot?: () => Promise<string[]>; pluginHost: TuiPlugi
         category: "Help",
         slashName: "start",
         run: () => dialog.replace(() => <DialogSetup />),
+      },
+      {
+        name: "olivecode.privacy",
+        title: "Privacy and measurement",
+        category: "Help",
+        slashName: "privacy",
+        run: () => dialog.replace(() => <DialogPrivacy />),
       },
       {
         name: "model.local",
@@ -1055,6 +1085,19 @@ function App(props: { onSnapshot?: () => Promise<string[]>; pluginHost: TuiPlugi
 
     const skipped = kv.get("skipped_version")
     if (skipped && !isVersionGreater(version, skipped)) return
+
+    if (InstallationChannel.startsWith("olivecode")) {
+      const choice = await DialogConfirm.show(
+        dialog,
+        "OliveCode update available",
+        `OliveCode v${version} is available. Open the official release page? Follow the installer instructions, then restart OliveCode. Your projects and settings stay in place.`,
+        "skip",
+      )
+      if (choice === false) kv.set("skipped_version", version)
+      if (choice === true)
+        void open(releasePage).catch(() => toast.show({ variant: "error", message: `Open ${releasePage} to update.` }))
+      return
+    }
 
     const choice = await DialogConfirm.show(
       dialog,

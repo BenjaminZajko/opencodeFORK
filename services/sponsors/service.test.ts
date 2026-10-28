@@ -5,12 +5,40 @@ import { createSponsorService } from "./service"
 
 function setup() {
   const keys = generateKeyPairSync("ed25519")
-  const payload = JSON.stringify({ id: "pilot", name: "Test", message: "Tools", website: "https://example.com", starts: "2026-10-01", ends: "2026-11-01" })
+  const payload = JSON.stringify({
+    id: "pilot",
+    name: "Test",
+    message: "Tools",
+    website: "https://example.com",
+    starts: "2026-10-01",
+    ends: "2026-11-01",
+  })
   let time = Date.parse("2026-10-02")
   const db = new Database(":memory:")
-  const service = createSponsorService({ db, campaign: { payload, signature: sign(null, Buffer.from(payload), keys.privateKey).toString("base64url") }, publicKey: keys.publicKey.export({ type: "spki", format: "pem" }).toString(), receiptSecret: "r".repeat(32), reportSecret: "s".repeat(32), now: () => time })
-  const request = (path: string, body?: unknown, headers?: HeadersInit) => service(new Request(`https://owned.example/v1/${path}`, { method: path === "report" ? "GET" : "POST", headers, ...(body ? { body: JSON.stringify(body) } : {}) }), "127.0.0.1")
-  return { db, request, advance: (ms: number) => { time += ms } }
+  const service = createSponsorService({
+    db,
+    campaign: { payload, signature: sign(null, Buffer.from(payload), keys.privateKey).toString("base64url") },
+    publicKey: keys.publicKey.export({ type: "spki", format: "pem" }).toString(),
+    receiptSecret: "r".repeat(32),
+    reportSecret: "s".repeat(32),
+    now: () => time,
+  })
+  const request = (path: string, body?: unknown, headers?: HeadersInit) =>
+    service(
+      new Request(`https://owned.example/v1/${path}`, {
+        method: path === "report" ? "GET" : "POST",
+        headers,
+        ...(body ? { body: JSON.stringify(body) } : {}),
+      }),
+      "127.0.0.1",
+    )
+  return {
+    db,
+    request,
+    advance: (ms: number) => {
+      time += ms
+    },
+  }
 }
 test("only genuine server receipts count, and retries never double count", async () => {
   const app = setup()
@@ -18,12 +46,20 @@ test("only genuine server receipts count, and retries never double count", async
     const { receipt } = await (await app.request("delivery")).json()
     expect((await app.request("event", { receipt, kind: "view" })).status).toBe(409)
     app.advance(1000)
-    expect(await (await app.request("event", { receipt, kind: "view" })).json()).toEqual({ accepted: true, duplicate: false })
-    expect(await (await app.request("event", { receipt, kind: "view" })).json()).toEqual({ accepted: false, duplicate: true })
+    expect(await (await app.request("event", { receipt, kind: "view" })).json()).toEqual({
+      accepted: true,
+      duplicate: false,
+    })
+    expect(await (await app.request("event", { receipt, kind: "view" })).json()).toEqual({
+      accepted: false,
+      duplicate: true,
+    })
     expect((await app.request("event", { receipt, kind: "click" })).status).toBe(200)
     const report = await (await app.request("report", undefined, { Authorization: `Bearer ${"s".repeat(32)}` })).json()
     expect(report.rows).toEqual([{ day: "2026-10-02", campaign: "pilot", views: 1, clicks: 1 }])
-  } finally { app.db.close() }
+  } finally {
+    app.db.close()
+  }
 })
 test("fake, expired, oversized, and extra-data events are rejected", async () => {
   const app = setup()
@@ -38,7 +74,9 @@ test("fake, expired, oversized, and extra-data events are rejected", async () =>
     expect((await app.request("event", { receipt, kind: "view" })).status).toBe(403)
     expect((await app.request("report")).status).toBe(401)
     expect(app.db.query("SELECT * FROM sponsor_daily").all()).toEqual([])
-  } finally { app.db.close() }
+  } finally {
+    app.db.close()
+  }
 })
 test("delivery is rate limited and accepts no project data", async () => {
   const app = setup()
@@ -48,5 +86,45 @@ test("delivery is rate limited and accepts no project data", async () => {
     expect((await app.request("delivery")).status).toBe(429)
     app.advance(60_000)
     expect((await app.request("delivery")).status).toBe(200)
-  } finally { app.db.close() }
+  } finally {
+    app.db.close()
+  }
+})
+
+test("opted-in usage deduplicates daily tokens, rotates by day, and never accepts extra project data", async () => {
+  let time = Date.parse("2026-10-28T10:00:00Z")
+  const db = new Database(":memory:")
+  const service = createSponsorService({
+    db,
+    receiptSecret: "r".repeat(32),
+    reportSecret: "s".repeat(32),
+    now: () => time,
+  })
+  const usage = { day: "2026-10-28", id: "a".repeat(64), platform: "darwin", version: "0.1.1", first: true }
+  const send = (data: unknown) =>
+    service(new Request("https://report.example/v1/usage", { method: "POST", body: JSON.stringify(data) }), "test")
+  try {
+    expect(await (await send(usage)).json()).toEqual({ accepted: true, duplicate: false })
+    expect(await (await send(usage)).json()).toEqual({ accepted: false, duplicate: true })
+    expect((await send({ ...usage, prompt: "never accepted" })).status).toBe(400)
+    expect((await send({ ...usage, platform: "private hostname" })).status).toBe(400)
+    expect((await send({ ...usage, day: "2026-10-27" })).status).toBe(400)
+    expect(db.query("SELECT first_starts,active_installations FROM usage_daily").all()).toEqual([
+      { first_starts: 1, active_installations: 1 },
+    ])
+    time += 86400_000
+    expect((await send({ ...usage, id: "b".repeat(64), day: "2026-10-29", first: false })).status).toBe(200)
+    expect(
+      db.query("SELECT SUM(first_starts) AS firsts,SUM(active_installations) AS active FROM usage_daily").get(),
+    ).toEqual({ firsts: 1, active: 2 })
+    const response = await service(
+      new Request("https://report.example/v1/report", { headers: { Authorization: `Bearer ${"s".repeat(32)}` } }),
+    )
+    const report = await response.json()
+    expect(report.usage).toHaveLength(2)
+    expect(JSON.stringify(report)).not.toContain(usage.id)
+    expect((await service(new Request("https://report.example/v1/report"))).status).toBe(401)
+  } finally {
+    db.close()
+  }
 })

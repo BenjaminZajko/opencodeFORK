@@ -36,6 +36,8 @@ jobs:
         working-directory: packages/tui
       - run: bun test test/olivecode --only-failures
         working-directory: packages/core
+      - run: bun test service.test.ts --only-failures
+        working-directory: services/sponsors
       - run: bun test test --only-failures
         working-directory: distribution
       - run: bun install --cwd site --frozen-lockfile

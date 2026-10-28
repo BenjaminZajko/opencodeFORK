@@ -1,0 +1,34 @@
+{
+  "verified": true,
+  "repository": "BenjaminZajko/opencodeFORK",
+  "origin": "https://olivecode.dev",
+  "scriptHashes": {
+    "install.sh": "43bde0a1a617673dda3c355b28b8977bcbc471052691e59823992aa3883149cc",
+    "install.ps1": "25ce5dcad58f3f94db115fcf6a94fb94cd77da912d3fba3f149fb28de8f59e67"
+  },
+  "tag": "v0.1.1",
+  "commit": "d7f101c89e8b466872cf4cc8e3c1408ba822b073",
+  "runID": 40687507575,
+  "checkedAt": "2026-10-28T12:36:20.593Z",
+  "assets": [
+    "OliveCode-macOS-arm64.zip",
+    "OliveCode-macOS-arm64.zip.sha256",
+    "OliveCode-macOS-x64.zip",
+    "OliveCode-macOS-x64.zip.sha256",
+    "OliveCode-Windows-x64.zip",
+    "OliveCode-Windows-x64.zip.sha256",
+    "OliveCode-Windows-arm64.zip",
+    "OliveCode-Windows-arm64.zip.sha256",
+    "OliveCode-Linux-x64.zip",
+    "OliveCode-Linux-x64.zip.sha256",
+    "OliveCode-Linux-arm64.zip",
+    "OliveCode-Linux-arm64.zip.sha256",
+    "OliveCode-Linux-x64-musl.zip",
+    "OliveCode-Linux-x64-musl.zip.sha256",
+    "OliveCode-Linux-arm64-musl.zip",
+    "OliveCode-Linux-arm64-musl.zip.sha256",
+    "install.sh",
+    "install.ps1",
+    "release-verification.json"
+  ]
+}
