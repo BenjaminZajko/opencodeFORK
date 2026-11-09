@@ -106,7 +106,7 @@ test("background mode starts independently and keeps Stop available", async () =
   }, { width: 120, height: 30, inline: () => <ModelSourceControls /> })
   try {
     const frame = await app.frame("Start background browser")
-    expect(frame).toContain("Mac apps and manual login need Visible control")
+    expect(frame).toContain(process.platform === "darwin" ? "Mac apps and manual login need Visible control" : "Apps and manual login need Visible control")
     app.mockInput.pressKey("n", { ctrl: true }); app.mockInput.pressEnter()
     await app.frame("■ Stop")
     app.open(); await app.frame("Background browser is on")
