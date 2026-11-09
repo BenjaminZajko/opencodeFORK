@@ -18,11 +18,11 @@ for (const placement of ["welcome", "chat"] as const) {
         inline: () => <box><SponsorPlacement placement={placement} /><text>Prompt stays reachable</text></box>,
       })
       try {
-        const frame = await app.frame("Ad unavailable right now.")
+        const frame = await app.frame("Your product here")
         const rows = frame.split("\n")
         const placementRow = rows.findIndex((row) => row.includes("Sponsored"))
         expect(placementRow).toBeGreaterThanOrEqual(0)
-        expect(rows[placementRow + 1]).toContain("Ad unavailable right now.")
+        expect(rows[placementRow + 1]).toContain("Your product here")
         expect(frame).toContain("Prompt stays reachable")
         expect(rows.findIndex((row) => row.includes("Prompt stays reachable"))).toBeGreaterThan(placementRow)
       } finally {

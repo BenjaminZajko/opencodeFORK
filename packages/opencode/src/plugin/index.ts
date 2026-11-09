@@ -25,6 +25,7 @@ import { OpenRouterAuthPlugin } from "./openrouter"
 import { CerebrasAuthPlugin, CerebrasPlugin } from "./cerebras"
 import { GroqAuthPlugin } from "./groq"
 import { MistralAuthPlugin } from "./mistral"
+import { ZaiAuthPlugin } from "./zai"
 import { NvidiaAuthPlugin } from "./nvidia"
 import { Llm7AuthPlugin } from "./llm7"
 import { SnowflakeCortexAuthPlugin } from "./snowflake-cortex"
@@ -71,7 +72,7 @@ export function experimentalWebSocketsEnabled(input: { enabled: boolean; channel
 
 // Built-in plugins that are directly imported (not installed from npm)
 function internalPlugins(_flags: RuntimeFlags.Info): PluginInstance[] {
-  return [OpenRouterAuthPlugin, GroqAuthPlugin, MistralAuthPlugin]
+  return [OpenRouterAuthPlugin, GroqAuthPlugin, MistralAuthPlugin, ZaiAuthPlugin]
 }
 
 function isServerPlugin(value: unknown): value is PluginInstance {

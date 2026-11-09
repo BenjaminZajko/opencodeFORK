@@ -13,17 +13,26 @@ export interface Entry {
   concrete: Record<string, string>
 }
 
-// Explicit preference order for coding; these values are not benchmark results.
-// NVIDIA trial-only access is excluded. See docs/olivecode/free-models.md.
+// Explicit preference order for coding (rechecked live 2026-11-09); these values are not benchmark results.
+// NVIDIA NIM trial credits are excluded; NVIDIA models served free through OpenRouter qualify. See docs/olivecode/free-models.md.
 export const CATALOG: Entry[] = [
   {
-    id: "laguna-s-2-1",
+    id: "nemotron-3-ultra",
+    codingScore: 0,
+    agenticScore: 0,
+    contextWindow: 1000000,
+    tier: "strong",
+    providers: ["openrouter"],
+    concrete: { openrouter: "nvidia/nemotron-3-ultra-550b-a55b:free" },
+  },
+  {
+    id: "flint-v1",
     codingScore: 0,
     agenticScore: 0,
     contextWindow: 262144,
     tier: "strong",
     providers: ["openrouter"],
-    concrete: { openrouter: "poolside/laguna-s-2.1:free" },
+    concrete: { openrouter: "recursive/flint-v1.0:free" },
   },
   {
     id: "north-mini-code",
@@ -33,6 +42,15 @@ export const CATALOG: Entry[] = [
     tier: "strong",
     providers: ["openrouter"],
     concrete: { openrouter: "cohere/north-mini-code:free" },
+  },
+  {
+    id: "glm-4.7-flash",
+    codingScore: 0,
+    agenticScore: 0,
+    contextWindow: 200000,
+    tier: "strong",
+    providers: ["zai"],
+    concrete: { zai: "glm-4.7-flash" },
   },
   {
     id: "gpt-oss-120b",
@@ -60,6 +78,15 @@ export const CATALOG: Entry[] = [
     tier: "fast",
     providers: ["groq"],
     concrete: { groq: "openai/gpt-oss-20b" },
+  },
+  {
+    id: "glm-4.5-flash",
+    codingScore: 0,
+    agenticScore: 0,
+    contextWindow: 131072,
+    tier: "fast",
+    providers: ["zai"],
+    concrete: { zai: "glm-4.5-flash" },
   },
   {
     id: "mistral-small",

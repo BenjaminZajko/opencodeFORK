@@ -7,21 +7,24 @@ Supported accounts:
 - OpenRouter: only explicit `:free` variants whose catalog input and output prices are both zero. Automatic paid routing is not offered.
 - Groq Free: GPT-OSS 120B, GPT-OSS 20B, and Qwen 3.8 27B, intersected with the available provider catalog.
 - Mistral Free mode: Codestral and Mistral Small, intersected with the available catalog.
+- Z.ai: GLM-4.7-Flash and GLM-4.5-Flash, which Z.ai prices as free. FlashX and GLM-5.x Flash are paid or limited-time and are excluded.
 - Ollama: local models; cloud variants are excluded.
 
 Use free-tier provider accounts. OliveCode cannot change a provider account's billing plan or guarantee access after its limits are exhausted. Provider quotas and availability can change. A cooldown time is a retry estimate from the provider response, not a promise that quota resets at that instant.
 
-The first coding recommendation is currently Laguna S 2.1 (free) through OpenRouter. OpenRouter reports 70.2% on Terminal-Bench 2.1 and 40.4% on DeepSWE for this model; its page also says prompts and outputs sent through the free endpoint may be used by Poolside to train and improve models. The picker displays that data-use note next to the recommendation. North Mini Code is another strong option specifically tuned for coding agents, including OpenCode. OpenRouter's North Mini page does not state the same training use; that absence is not a guarantee that prompts are never retained or used. Benchmark scores use different tests and do not prove one model is best at every task.
+The first coding recommendation is currently Nemotron 3 Ultra (free) through OpenRouter, served by NVIDIA with a 1M-token context. NVIDIA reports 70.7% on SWE-bench Verified and 56.4% on Terminal-Bench 2.1 for this model. Flint and North Mini Code follow. Laguna S 2.1 was removed after its free OpenRouter endpoint disappeared (checked 2026-11-09). Benchmark scores are vendor-reported, use different harnesses, and do not prove one model is best at every task. On 2026-11-09 the same small bug-fix task (fix two Python functions, write and run pytest tests) passed with Nemotron 3 Ultra, Flint, North Mini Code, GPT-OSS 120B and Codestral through OliveCode.
 
 The picker then shows another model from that provider and one recommended model from each other connected provider. The complete free library and retry schedule live one menu level below it. This list follows model-specific coding evidence and explicit data-use tradeoffs; it is not a claim that raw usage popularity equals quality.
 
-Evidence checked 2026-09-28; model presence rechecked against the public catalog 2026-09-27:
+Evidence checked 2026-11-09 against the live OpenRouter catalog and provider pricing pages:
 
 - [Groq Free Plan Limits](https://console.groq.com/docs/rate-limits)
 - [Mistral Free-mode quickstart](https://docs.mistral.ai/getting-started/quickstarts/studio/activate-and-generate-api-key)
 - [Mistral usage limits](https://docs.mistral.ai/admin/billing-usage/usage-limits)
 - [OpenRouter public catalog](https://openrouter.ai/api/v1/models)
-- [Laguna S 2.1 free endpoint, coding benchmarks, tool use, and training notice](https://openrouter.ai/poolside/laguna-s-2.1:free)
+- [Nemotron 3 Ultra model card and benchmarks](https://huggingface.co/nvidia/NVIDIA-Nemotron-3-Ultra-550B-A55B-BF16)
+- [Z.ai pricing (free Flash models)](https://docs.z.ai/guides/overview/pricing)
+- [OpenRouter free-model limits](https://openrouter.ai/docs/api/reference/limits)
 - [North Mini Code free endpoint and OpenCode compatibility](https://openrouter.ai/cohere/north-mini-code:free)
 
 NVIDIA trial access has been removed. Google AI Studio and ModelScope remain excluded per the project's earlier product decisions. No paid provider connection or upgrade action is offered.

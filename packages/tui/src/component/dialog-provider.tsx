@@ -19,7 +19,7 @@ import { useClipboard } from "../context/clipboard"
 import { useDialogRequest } from "./dialog-request"
 import open from "open"
 
-const PROVIDER_PRIORITY: Record<string, number> = { openrouter: 0, groq: 1, mistral: 2 }
+const PROVIDER_PRIORITY: Record<string, number> = { openrouter: 0, groq: 1, zai: 2, mistral: 3 }
 
 const CUSTOM_PROVIDER_OPTION_VALUE = "__opencode_custom_provider__"
 const CUSTOM_PROVIDER_ID = /^[a-z0-9][a-z0-9-_]*$/
@@ -54,7 +54,7 @@ export function providerOptions(list: { id: string; name: string }[]): ProviderO
         title: provider.name,
         value: provider.id,
         providerID: provider.id,
-        description: { openrouter: "Free variants only", groq: "Use a Free account", mistral: "Use Free mode" }[provider.id],
+        description: { openrouter: "Free variants only", groq: "Use a Free account", mistral: "Use Free mode", zai: "Free GLM Flash models" }[provider.id],
         category: "Free providers",
       })),
     ),
@@ -437,6 +437,13 @@ function ApiMethod(props: ApiMethodProps) {
               <box gap={1}>
                 <text fg={theme.text}>
                   Go to <span style={{ fg: theme.primary }}>https://console.mistral.ai</span> (API Keys) to get a key
+                </text>
+              </box>
+            ),
+            zai: (
+              <box gap={1}>
+                <text fg={theme.text}>
+                  Go to <span style={{ fg: theme.primary }}>https://z.ai/manage-apikey/apikey-list</span> to get a key
                 </text>
               </box>
             ),

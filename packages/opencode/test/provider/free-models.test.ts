@@ -18,6 +18,11 @@ test("unknown prices, paid aliases, trial-only providers and Ollama cloud models
   expect(freeModel("ollama", "gpt-oss:120b-cloud")).toBe(false)
   expect(freeModel("groq", "openai/gpt-oss-120b")).toBe(true)
   expect(freeModel("groq", "future-unknown-model")).toBe(false)
+  expect(freeModel("zai", "glm-4.7-flash")).toBe(true)
+  expect(freeModel("zai", "glm-4.5-flash")).toBe(true)
+  expect(freeModel("zai", "glm-4.7-flashx")).toBe(false)
+  expect(freeModel("zai", "glm-5.3-flash")).toBe(false)
+  expect(freeModel("zai", "glm-4.7")).toBe(false)
 })
 
 const it = testEffect(LayerNode.compile(Provider.node))

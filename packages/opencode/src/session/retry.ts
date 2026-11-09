@@ -89,12 +89,20 @@ function exponential(attempt: number, random: number) {
   return Math.ceil(base + base * RETRY_JITTER_FACTOR * random)
 }
 
+/** The provider refused this request size outright (e.g. Groq's free tokens-per-minute cap). Another model may accept it. */
+export function oversized(error: Err) {
+  return SessionV1.APIError.isInstance(error) && error.data.statusCode === 413 && !error.data.isRetryable
+}
+
 export function retryable(error: Err, provider: string) {
   // context overflow errors should not be retried
   if (SessionV1.ContextOverflowError.isInstance(error)) return undefined
   if (toolValidationFailure(error)) return { message: "Correcting the model’s tool call" }
   if (SessionV1.APIError.isInstance(error)) {
     const status = error.data.statusCode
+    // A single request larger than the per-minute token cap can never fit, even
+    // though its body says "rate limit"; retrying it only stalls the session.
+    if (oversized(error)) return undefined
     // 5xx errors are transient server failures and should always be retried,
     // even when the provider SDK doesn't explicitly mark them as retryable.
     if (
@@ -198,7 +206,8 @@ export function policy(opts: {
     next: number
     error: Err
   }) => Effect.Effect<void>
-  switchModel?: (error: Err, attempt: number) => Effect.Effect<void>
+  /** Resolves true when a different model will serve the retry. */
+  switchModel?: (error: Err, attempt: number) => Effect.Effect<boolean | void>
   toolValidationRecovery?: boolean
 }) {
   let toolRepairs = 0
@@ -207,9 +216,18 @@ export function policy(opts: {
       const error = opts.parse(meta.input)
       const repair = toolValidationFailure(error)
       if (repair && (opts.toolValidationRecovery === false || toolRepairs >= 2)) return Cause.done(meta.attempt)
+      if (meta.attempt > RETRY_MAX_RETRIES) return Cause.done(meta.attempt)
+      if (oversized(error) && opts.switchModel) {
+        const switchModel = opts.switchModel
+        return Effect.gen(function* () {
+          if (!(yield* switchModel(error, meta.attempt))) return yield* Cause.done(meta.attempt)
+          const now = yield* Clock.currentTimeMillis
+          yield* opts.set({ attempt: meta.attempt, message: "Request too large for this provider's free allowance · switching to another free model", next: now, error })
+          return [meta.attempt, Duration.millis(0)] as [number, Duration.Duration]
+        })
+      }
       const retry = retryable(error, opts.provider)
       if (!retry) return Cause.done(meta.attempt)
-      if (meta.attempt > RETRY_MAX_RETRIES) return Cause.done(meta.attempt)
       return Effect.gen(function* () {
         if (repair) toolRepairs++
         const wait = repair ? 0 : delay(meta.attempt, SessionV1.APIError.isInstance(error) ? error : undefined)

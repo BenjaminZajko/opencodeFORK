@@ -123888,12 +123888,8 @@
         "release_date": "2026-07-21",
         "last_updated": "2026-10-16",
         "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
+          "input": ["text"],
+          "output": ["text"]
         },
         "open_weights": true,
         "limit": {
@@ -134495,6 +134491,33 @@
         "cost": {
           "input": 0.13,
           "output": 0.4
+        }
+      },
+      "recursive/flint-v1.0:free": {
+        "id": "recursive/flint-v1.0:free",
+        "name": "Flint (free)",
+        "description": "Free provider route for experiments, demos, and cost-sensitive chat workloads",
+        "family": "flint",
+        "attachment": false,
+        "reasoning": true,
+        "reasoning_options": [],
+        "tool_call": true,
+        "structured_output": false,
+        "temperature": true,
+        "release_date": "2026-10-21",
+        "last_updated": "2026-10-21",
+        "modalities": {
+          "input": ["text"],
+          "output": ["text"]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 262144,
+          "output": 235929
+        },
+        "cost": {
+          "input": 0,
+          "output": 0
         }
       }
     }

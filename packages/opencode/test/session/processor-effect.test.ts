@@ -1384,3 +1384,55 @@ for (const cooling of [false, true]) {
     ),
   )
 }
+
+it.live("session.processor moves a request too large for Groq's free allowance to another free model", () =>
+  provideTmpdirServer(
+    ({ dir, llm }) =>
+      Effect.gen(function* () {
+        const { processors, session, provider } = yield* boot()
+        yield* llm.error(413, { error: { message: "Request too large for model openai/gpt-oss-120b on tokens per minute (TPM): Limit 8000, Requested 9508", type: "tokens", code: "rate_limit_exceeded" } })
+        yield* llm.text("after")
+
+        const chat = yield* session.create({})
+        const parent = yield* user(chat.id, "large")
+        const msg = yield* assistant(chat.id, parent.id, path.resolve(dir))
+        const mdl = yield* provider.getModel(ProviderV2.ID.make("groq"), ModelV2.ID.make("openai/gpt-oss-120b"))
+        const handle = yield* processors.create({ assistantMessage: msg, sessionID: chat.id, model: mdl })
+        const value = yield* handle.process({
+          user: {
+            id: parent.id,
+            sessionID: chat.id,
+            role: "user",
+            time: parent.time,
+            agent: parent.agent,
+            model: { providerID: ProviderV2.ID.make("groq"), modelID: ModelV2.ID.make("openai/gpt-oss-120b") },
+          } satisfies SessionV1.User,
+          sessionID: chat.id,
+          model: mdl,
+          agent: agent(),
+          system: [],
+          messages: [{ role: "user", content: "large" }],
+          tools: {},
+        })
+
+        expect(value).toBe("continue")
+        expect(yield* llm.calls).toBe(2)
+        expect(handle.message.error).toBeUndefined()
+        expect(handle.message.providerID).toBe(ProviderV2.ID.make("mistral"))
+        expect(handle.message.modelID).toBe(ModelV2.ID.make("codestral-latest"))
+      }),
+    {
+      config: (url) => {
+        const config = fallbackCfg(url)
+        const base = config.provider.openrouter
+        const model = base.models["cohere/north-mini-code:free"]
+        return {
+          provider: {
+            groq: { ...base, id: "groq", whitelist: ["openai/gpt-oss-120b"], models: { "openai/gpt-oss-120b": { ...model, id: "openai/gpt-oss-120b" } } },
+            mistral: { ...base, id: "mistral", whitelist: ["codestral-latest"], models: { "codestral-latest": { ...model, id: "codestral-latest" } } },
+          },
+        }
+      },
+    },
+  ),
+)

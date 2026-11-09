@@ -18,7 +18,7 @@ describe("ProviderFallback catalog", () => {
   it("offers only ongoing free-plan providers, without invented scores", () => {
     expect(CATALOG.flatMap((entry) => entry.providers)).not.toContain("nvidia")
     expect(CATALOG.every((entry) => entry.codingScore === 0 && entry.agenticScore === 0)).toBe(true)
-    expect(rank(CATALOG)[0].id).toBe("laguna-s-2-1")
+    expect(rank(CATALOG)[0].id).toBe("nemotron-3-ultra")
   })
 })
 
@@ -82,7 +82,7 @@ describe("rankedDefault", () => {
   it("openrouter-only users start on the preferred free coding model", () => {
     expect(rankedDefault(new Set(["openrouter"]))).toEqual({
       providerID: "openrouter",
-      modelID: "poolside/laguna-s-2.1:free",
+      modelID: "nvidia/nemotron-3-ultra-550b-a55b:free",
     })
   })
 
@@ -111,7 +111,7 @@ describe("rankedDefault", () => {
   it("falls back across tiers when the preferred tier has no entry", () => {
     expect(rankedDefault(new Set(["openrouter"]), CATALOG, "fast")).toEqual({
       providerID: "openrouter",
-      modelID: "poolside/laguna-s-2.1:free",
+      modelID: "nvidia/nemotron-3-ultra-550b-a55b:free",
     })
   })
 })
@@ -186,5 +186,11 @@ describe("concrete ids against models-api.json", () => {
       if (!modelID) continue
       expect(servedIDs.has(modelID)).toBe(true)
     }
+  })
+})
+
+describe("Z.ai free models", () => {
+  it("zai-only users start on the free GLM-4.7-Flash", () => {
+    expect(rankedDefault(new Set(["zai"]))).toEqual({ providerID: "zai", modelID: "glm-4.7-flash" })
   })
 })

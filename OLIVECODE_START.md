@@ -3,7 +3,7 @@
 Open **Start OliveCode.command** in the parent project folder. Choose an existing project folder, or press Return to create a **Workspace** folder beside the launcher.
 
 1. Choose **Start here**, or type `/start`.
-2. Choose **Set up cloud** and connect OpenRouter, Groq, or Mistral using your own free account. OpenRouter supports browser sign-in or API-key entry.
+2. Choose **Set up cloud** and connect OpenRouter, Groq, Z.ai, or Mistral using your own free account. OpenRouter supports browser sign-in or API-key entry.
 3. Choose a model and describe what you want to build or fix.
 
 **Assist is on by default.** In the composer footer, select **Assist ▾** beside Cloud and Local to switch **Teamwork** or **Follow-through** off or on. Type `/assist` to open the same controls. Teamwork shares a small project file map with up to two eligible free advisers. One proposes a plan, another challenges it, and on longer tasks a teammate checks progress after actual tool work. Your selected model remains the only one that edits files or runs tools. Follow-through reviews the result, asks the lead to address concrete omissions, and uses two independent first reviews for larger tasks. It stops for your input, a repeated gap without new work, a model step limit, or six reviews. Helper activity is visible while work is underway and folds into the finished response. Extra requests use your free-provider quotas, may take longer, and can miss issues. Cloud helpers only receive task context in cloud tasks. Local helpers are installed Ollama models and stay on this computer. Settings are saved for the current project; toggles apply at the next task step. See [task assistance](docs/olivecode/task-assistance.md) for details.
@@ -14,7 +14,7 @@ Session details stay hidden when you widen the terminal. To see the task list, m
 
 The parent folder's **Start OliveCode.command** now launches the refreshed build with the updated welcome logo and Task assistance. If you opened an older extracted archive, use the new archive listed below. For source development, run `cd /Users/benji/Desktop/OliveCode_main/opencodeFORK && bun run --cwd packages/opencode dev -- /Users/benji/Desktop/OliveCode_main/Workspace`.
 
-`/cloud` puts Laguna S 2.1 first while it is available. OpenRouter reports 70.2% on Terminal-Bench 2.1 and 40.4% on DeepSWE. Its free endpoint may use prompts and responses to improve Poolside models, and OliveCode shows this notice next to the choice. Pick North Mini Code if you prefer its OpenCode-specific tuning and want to avoid that particular training notice. Scores come from different tests, so no model is best at every kind of task.
+`/cloud` puts Nemotron 3 Ultra first while OpenRouter offers it free. NVIDIA reports 70.7% on SWE-bench Verified, and it has a 1M-token context. Flint and North Mini Code are strong alternatives. Z.ai's free GLM-4.7-Flash is available after connecting a Z.ai key. Scores come from different tests, so no model is best at every kind of task.
 
 The picker then shows another model from the same provider and one recommendation from each other connected provider. **All free models**, **Waiting for reset**, and **Connect free providers** open the rest of the choices. Retry countdowns are estimates; providers may enforce longer account limits.
 

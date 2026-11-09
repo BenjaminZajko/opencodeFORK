@@ -1315,6 +1315,9 @@ export function Prompt(props: PromptProps) {
       const example = shell()[store.placeholder % shell().length]
       return `Run a command… "${example}"`
     }
+    if (local.agent.current()?.name === "computer") return "What would you like me to do on your computer?"
+    if (local.agent.current()?.name === "computer_background") return "What would you like me to do on a website?"
+    if (local.agent.current()?.name === "computer_background_mac") return "What would you like me to do on your separate Mac?"
     if (!list().length) return undefined
     return dimensions().width < 90
       ? "Describe what you want to build or fix…"
@@ -1461,20 +1464,21 @@ export function Prompt(props: PromptProps) {
                       </Show>
                       <Show when={store.mode === "normal"}>
                         <box flexDirection="row" gap={1} flexGrow={1} flexShrink={1} minWidth={0}>
-                          <text fg={fadeColor(theme.textMuted, modelMetaAlpha())}>·</text>
+                          {/* One text node so narrow footers truncate once, at the end, instead of mangling both labels. */}
                           <text
                             flexShrink={1}
                             truncate
                             wrapMode="none"
                             fg={fadeColor(leader() ? theme.textMuted : theme.text, modelMetaAlpha())}
                           >
-                            {local.model.current() ? local.model.parsed().model : "Choose a model"}
+                            <span style={{ fg: fadeColor(theme.textMuted, modelMetaAlpha()) }}>{"· "}</span>
+                            {local.model.current() ? local.model.parsed().model.replace(/\s*\(free\)$/i, "") : "Choose a model"}
+                            <Show when={local.model.current() && dimensions().width >= 90 && currentProviderLabel()}>
+                              <span style={{ fg: fadeColor(theme.textMuted, modelMetaAlpha()) }}>
+                                {" · " + currentProviderLabel()}
+                              </span>
+                            </Show>
                           </text>
-                          <Show when={local.model.current() && dimensions().width >= 90}>
-                            <text truncate wrapMode="none" fg={fadeColor(theme.textMuted, modelMetaAlpha())}>
-                              {currentProviderLabel()}
-                            </text>
-                          </Show>
                           <Show when={showVariant() && dimensions().width >= 70}>
                             <text fg={fadeColor(theme.textMuted, variantMetaAlpha())}>·</text>
                             <text>

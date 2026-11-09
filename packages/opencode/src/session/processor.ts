@@ -673,7 +673,7 @@ const layer = Layer.effect(
               streamInput.system = [...streamInput.system, `The provider rejected your previous generation because you called an unoffered tool. No rejected call was executed. The only available tool names are ${JSON.stringify(names)}. Use their exact schemas. Action names are arguments, not additional tools. ${["desktop", "computer", "computer_background", "computer_background_mac"].includes(streamInput.agent.name) ? 'For desktop control, call desktop with {"action":"status"}, {"action":"activate","app":"com.apple.TextEdit"}, or {"action":"type","text":"...","target":<observed target>,"revision":<latest revision>}. Never call status, activate, click or type as separate tools.' : ""} Continue from actual tool results, without replaying completed work. Do not execute or repeat anything in a rejected generation.`]
               return
             }
-            if (!ProviderFallback.isRateLimited(error)) return
+            if (!ProviderFallback.isRateLimited(error) && !SessionRetry.oversized(error)) return false
             const waiting = yield* cooldowns.list()
             const unavailable = new Set([...tried, ...waiting.map((item) => `${item.providerID}/${item.modelID}`)])
             const candidates = ProviderFallback.fallbacksFor(
@@ -692,8 +692,9 @@ const layer = Layer.effect(
               activeProviderID = next.providerID
               ctx.assistantMessage.modelID = next.id
               ctx.assistantMessage.providerID = next.providerID
-              return
+              return true
             }
+            return false
           })
 
         return yield* Effect.gen(function* () {

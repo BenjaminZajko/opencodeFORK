@@ -103,12 +103,18 @@ export function SponsorPlacement(props: { placement?: "welcome" | "chat" } = {})
         when={sponsor()}
         fallback={
           <>
-            <text fg={theme.textMuted} truncate wrapMode="none">
-              Ad unavailable right now.
+            <text
+              fg={theme.textMuted}
+              truncate
+              wrapMode="none"
+              onMouseUp={() => void open("https://olivecode.dev/sponsors").catch(() => {})}
+            >
+              Your product here · reach developers building with free AI ·{" "}
+              <span style={{ fg: theme.primary }}>olivecode.dev/sponsors</span>
             </text>
             <Show when={!compact()}>
               <text fg={theme.textMuted} truncate wrapMode="none">
-                Sponsorship helps keep OliveCode free.
+                Sponsorship keeps OliveCode free for everyone.
               </text>
             </Show>
           </>

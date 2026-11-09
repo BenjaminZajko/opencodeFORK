@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test"
 import { ComputerBrowser } from "../../src/computer/browser"
 
 const executable = await ComputerBrowser.findBrowser().catch(() => undefined)
-type Observation = { revision: number; text: string; url: string; activeTab: string; tabs: { tab: string; url: string; active: boolean }[]; controls: { target: number; name: string; sensitive: boolean; value: string }[] }
+type Observation = { revision: number; title: string; text: string; textStart: string; textTruncated?: string; headings: { level: number; text: string }[]; url: string; activeTab: string; tabs: { tab: string; url: string; active: boolean }[]; controls: { target: number; name: string; offscreen?: boolean; sensitive: boolean; value: string; readonly?: boolean; options?: { value: string; label: string; disabled: boolean; selected: boolean }[] }[] }
 
 const HTML = `<!doctype html><title>OliveCode test page</title>
 <label>Name <input aria-label="Name"></label>
@@ -11,7 +11,10 @@ const HTML = `<!doctype html><title>OliveCode test page</title>
 <button onclick="this.textContent='Changed'">Change control</button>
 <p id="result">Not saved</p>
 <div style="height:1800px"></div><button>Bottom control</button>`
-const PUBLIC_HTML = `<!doctype html><title>Public fixture</title><label>Search <input aria-label="Search" value="original"></label><a href="/other" target="_blank">Open another tab</a><p>Public screenshot fixture</p>`
+const PUBLIC_HTML = `<!doctype html><title>Public fixture</title><label>Search <input aria-label="Search" value="original"></label><a href="/other" target="_blank">Open another tab</a><p>Public screenshot fixture</p>
+<label>Country <select aria-label="Country" onchange="document.querySelector('#selection').textContent=this.value"><option value="sk">Slovakia</option><option value="cz">Czechia</option><option value="locked" disabled>Unavailable</option><optgroup disabled label="Not available"><option value="grouped">Grouped</option></optgroup><option value="dup1">Duplicate</option><option value="dup2">Duplicate</option></select></label><p id="selection">sk</p>
+<input aria-label="Receipt" readonly value="Keep me">
+<button aria-disabled="true" onclick="this.textContent='Should never happen'">Unavailable action</button>`
 
 const MAPS_HTML = `<!doctype html><meta charset="utf-8"><title>Route fixture</title>
 <input id="ucc-1" aria-label="Hľadať v Mapách Google">
@@ -27,6 +30,12 @@ async function fixture(run: (browser: ComputerBrowser.Browser, url: string, sign
 }
 
 describe("Computer browser", () => {
+  test("Ubuntu Snap browser profiles stay in the app-owned common directory", () => {
+    expect(ComputerBrowser.browserProfileRoot("/snap/bin/chromium", "linux", "/home/test", "/tmp")).toBe("/home/test/snap/chromium/common/olivecode-profiles")
+    expect(ComputerBrowser.browserProfileRoot("/usr/bin/chromium-browser", "linux", "/home/test", "/tmp")).toBe("/home/test/snap/chromium/common/olivecode-profiles")
+    expect(ComputerBrowser.browserProfileRoot("/usr/bin/google-chrome", "linux", "/home/test", "/tmp")).toBe("/tmp")
+    expect(ComputerBrowser.browserProfileRoot("/Applications/Google Chrome.app", "darwin", "/Users/test", "/tmp")).toBe("/tmp")
+  })
   test("distinguishes ordinary generated IDs and search labels from credentials", () => {
     for (const field of [
       { id: "ucc-1", label: "Hľadať v Mapách Google" },
@@ -76,6 +85,10 @@ describe("Computer browser", () => {
     const privateField = page.controls.find((node) => node.name === "Password")!
     expect(privateField.sensitive).toBe(true)
     await expect(browser.perform({ action: "type", target: privateField.target, revision: page.revision, text: "no" }, signal)).rejects.toThrow("Private fields")
+    const name = page.controls.find((node) => node.name === "Name")!
+    page = await browser.perform({ action: "click", target: name.target, revision: page.revision }, signal) as Observation
+    page = await browser.perform({ action: "press", key: "Tab" }, signal) as Observation
+    await expect(browser.perform({ action: "press", key: "Enter" }, signal)).rejects.toThrow("Private fields")
   }), 30000)
 
   test.skipIf(!executable)("refuses stale targets and a changed DOM control", async () => fixture(async (browser, url, signal) => {
@@ -89,18 +102,74 @@ describe("Computer browser", () => {
     await expect(browser.perform({ action: "click", target: button.target, revision: fresh.revision }, signal)).rejects.toThrow("Observe again")
   }), 30000)
 
-  test.skipIf(!executable)("reveals controls below the fold and closes permanently", async () => fixture(async (browser, url, signal) => {
+  test.skipIf(!executable)("lists controls below the fold, clicks them directly and closes permanently", async () => fixture(async (browser, url, signal) => {
     let page = await browser.perform({ action: "open", url }, signal) as Observation
-    expect(page.controls.some((node) => node.name === "Bottom control")).toBe(false)
-    for (let i = 0; i < 6; i++) page = await browser.perform({ action: "scroll", direction: "down" }, signal) as Observation
+    const bottom = page.controls.find((node) => node.name === "Bottom control")!
+    expect(bottom.offscreen).toBe(true)
+    page = await browser.perform({ action: "click", target: bottom.target, revision: page.revision }, signal) as Observation
+    expect(page.controls.find((node) => node.name === "Bottom control")?.offscreen).toBeUndefined()
+    expect(page.controls.find((node) => node.name === "Save")?.offscreen).toBe(true)
+    for (let i = 0; i < 6; i++) page = await browser.perform({ action: "scroll", direction: "up" }, signal) as Observation
     // Input wheel events may finish rendering after their acknowledgment.
     const deadline = Date.now() + 3000
-    while (!page.controls.some((node) => node.name === "Bottom control") && Date.now() < deadline)
+    while (page.controls.find((node) => node.name === "Save")?.offscreen && Date.now() < deadline)
       page = await browser.perform({ action: "observe" }, signal) as Observation
-    expect(page.controls.some((node) => node.name === "Bottom control")).toBe(true)
+    expect(page.controls.find((node) => node.name === "Save")?.offscreen).toBeUndefined()
     await browser.close()
     await expect(browser.perform({ action: "open", url }, signal)).rejects.toThrow("Browser stopped")
   }), 30000)
+
+  test.skipIf(!executable)("waits for a form submission to load the result page and keeps observations compact", async () => {
+    const links = Array.from({ length: 300 }, (_, i) => `<p><a href="/item/${i}">Item ${i}</a></p>`).join("")
+    const server = Bun.serve({ hostname: "127.0.0.1", port: 0, fetch: async (request) => {
+      const url = new URL(request.url)
+      if (url.pathname === "/search") {
+        await Bun.sleep(300)
+        return new Response(`<!doctype html><title>Results</title><h1>Results for ${url.searchParams.get("q")}</h1>`, { headers: { "content-type": "text/html" } })
+      }
+      return new Response(`<!doctype html><title>Home</title><form action="/search"><input name="q" aria-label="Query"><button>Search</button></form>${links}`, { headers: { "content-type": "text/html" } })
+    } })
+    const browser = new ComputerBrowser.Browser({ executable, headless: true })
+    const signal = new AbortController().signal
+    try {
+      let page = await browser.perform({ action: "open", url: `http://127.0.0.1:${server.port}/` }, signal) as Observation
+      expect(page.controls.length).toBeLessThanOrEqual(125)
+      expect(page.controls.filter((node) => node.offscreen).length).toBe(25)
+      expect(JSON.stringify(page.controls[0])).not.toContain("disabled")
+      const query = page.controls.find((node) => node.name === "Query")!
+      page = await browser.perform({ action: "fill", target: query.target, revision: page.revision, text: "olives" }, signal) as Observation
+      const search = page.controls.find((node) => node.name === "Search")!
+      page = await browser.perform({ action: "click", target: search.target, revision: page.revision }, signal) as Observation
+      expect(page.title).toBe("Results")
+      expect(page.text).toContain("Results for olives")
+      page = await browser.perform({ action: "back" }, signal) as Observation
+      const again = page.controls.find((node) => node.name === "Query")!
+      page = await browser.perform({ action: "fill", target: again.target, revision: page.revision, text: "figs" }, signal) as Observation
+      page = await browser.perform({ action: "press", key: "Enter" }, signal) as Observation
+      expect(page.text).toContain("Results for figs")
+      await expect(browser.perform({ action: "press", key: "Meta" }, signal)).rejects.toThrow("Press one of")
+    } finally { await browser.close(); await server.stop(true) }
+  }, 60000)
+
+  test.skipIf(!executable)("reads long pages from the scroll position and outlines headings", async () => {
+    const sections = Array.from({ length: 40 }, (_, i) => `<h2>Section ${i + 1}</h2><p>${`Paragraph ${i + 1} filler text. `.repeat(40)}</p>`).join("")
+    const server = Bun.serve({ hostname: "127.0.0.1", port: 0, fetch: () => new Response(`<!doctype html><title>Long</title><h1>Long article</h1>${sections}<p>Final sentence marker.</p>`, { headers: { "content-type": "text/html" } }) })
+    const browser = new ComputerBrowser.Browser({ executable, headless: true })
+    const signal = new AbortController().signal
+    try {
+      let page = await browser.perform({ action: "open", url: `http://127.0.0.1:${server.port}/` }, signal) as Observation
+      expect(page.headings[0]).toEqual({ level: 1, text: "Long article" })
+      expect(page.headings).toHaveLength(41)
+      expect(page.textTruncated).toBeDefined()
+      expect(page.text).not.toContain("Final sentence marker.")
+      const deadline = Date.now() + 20000
+      while (!page.text.includes("Final sentence marker.") && Date.now() < deadline)
+        page = await browser.perform({ action: "scroll", direction: "down" }, signal) as Observation
+      expect(page.textStart).toBe("viewport")
+      expect(page.text).toContain("Final sentence marker.")
+      expect(page.text).not.toContain("Paragraph 1 filler")
+    } finally { await browser.close(); await server.stop(true) }
+  }, 60000)
 
   test.skipIf(!executable)("cancels startup without launching another action", async () => fixture(async (browser, url) => {
     const controller = new AbortController()
@@ -116,7 +185,7 @@ describe("Computer browser", () => {
     page = await browser.perform({ action: "fill", target: field.target, revision: page.revision, text: "replacement" }, signal) as Observation
     expect(page.controls.find((node) => node.name === "Search")?.value).toBe("replacement")
     page = await browser.perform({ action: "fill", target: field.target, revision: page.revision, text: "" }, signal) as Observation
-    expect(page.controls.find((node) => node.name === "Search")?.value).toBe("")
+    expect(page.controls.find((node) => node.name === "Search")?.value ?? "").toBe("")
   }), 30000)
 
   test.skipIf(!executable)("switches owned tabs and invalidates targets from the previous tab", async () => fixture(async (browser, url, signal) => {
@@ -157,3 +226,56 @@ describe("Computer browser", () => {
     expect(page.text).toContain("Public screenshot fixture")
   }), 30000)
 })
+
+test.skipIf(!executable)(
+  "selects observed dropdown options and verifies change events",
+  async () =>
+    fixture(async (browser, url, signal) => {
+      let page = (await browser.perform({ action: "open", url: url + "public" }, signal)) as Observation
+      const field = page.controls.find((node) => node.name === "Country")!
+      expect(field.options?.find((option) => option.value === "cz")?.label).toBe("Czechia")
+      page = (await browser.perform(
+        { action: "select", target: field.target, revision: page.revision, text: "Czechia" },
+        signal,
+      )) as Observation
+      expect(page.controls.find((node) => node.name === "Country")?.value).toBe("cz")
+      expect(page.text).toContain("cz")
+      for (const text of ["Unavailable", "Grouped", "Duplicate", "Missing"]) {
+        await expect(
+          browser.perform({ action: "select", target: field.target, revision: page.revision, text }, signal),
+        ).rejects.toThrow()
+        page = (await browser.perform({ action: "observe" }, signal)) as Observation
+        expect(page.controls.find((node) => node.name === "Country")?.value).toBe("cz")
+      }
+      page = (await browser.perform(
+        { action: "select", target: field.target, revision: page.revision, text: "sk" },
+        signal,
+      )) as Observation
+      expect(page.controls.find((node) => node.name === "Country")?.value).toBe("sk")
+      await expect(
+        browser.perform({ action: "select", target: field.target, revision: 1, text: "cz" }, signal),
+      ).rejects.toThrow("Observe again")
+    }),
+  30000,
+)
+
+test.skipIf(!executable)(
+  "refuses read-only fields and aria-disabled controls without sending input",
+  async () =>
+    fixture(async (browser, url, signal) => {
+      const page = (await browser.perform({ action: "open", url: url + "public" }, signal)) as Observation
+      const receipt = page.controls.find((node) => node.name === "Receipt")!
+      expect(receipt.readonly).toBe(true)
+      await expect(
+        browser.perform({ action: "fill", target: receipt.target, revision: page.revision, text: "Replace" }, signal),
+      ).rejects.toThrow("read-only")
+      const unavailable = page.controls.find((node) => node.name === "Unavailable action")!
+      await expect(
+        browser.perform({ action: "click", target: unavailable.target, revision: page.revision }, signal),
+      ).rejects.toThrow("disabled")
+      const after = (await browser.perform({ action: "observe" }, signal)) as Observation
+      expect(after.controls.find((node) => node.name === "Receipt")?.value).toBe("Keep me")
+      expect(after.text).not.toContain("Should never happen")
+    }),
+  30000,
+)

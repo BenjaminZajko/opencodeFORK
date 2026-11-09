@@ -16,6 +16,9 @@ import type { Provider, ProviderCooldown } from "@opencode-ai/sdk/v2"
 // Minimal structural view of a provider for cloud listing. The real
 // Provider objects satisfy this; the narrow shape keeps the pure builder
 // below unit-testable without full SDK fixtures.
+// Highlighted only while OpenRouter still lists it as free; benchmark is NVIDIA-reported.
+const TOP_PICK = "nvidia/nemotron-3-ultra-550b-a55b:free"
+
 export interface CloudModelSource {
   id: string
   name: string
@@ -163,13 +166,13 @@ export function DialogCloud() {
         : [{ title: "Back to recommendations", value: "back", onSelect: () => setPage("recommended") }]),
       ...rows.map((entry) => ({
         title:
-          entry.providerID === "openrouter" && entry.modelID === "poolside/laguna-s-2.1:free"
+          entry.providerID === "openrouter" && entry.modelID === TOP_PICK
             ? `${entry.title} · coding pick`
             : entry.title,
         value: { providerID: entry.providerID, modelID: entry.modelID },
         description:
-          entry.providerID === "openrouter" && entry.modelID === "poolside/laguna-s-2.1:free"
-            ? "70.2% Terminal-Bench 2.1 · free-tier prompts may train Poolside models"
+          entry.providerID === "openrouter" && entry.modelID === TOP_PICK
+            ? "NVIDIA reports 70.7% SWE-bench Verified · 1M context · OpenRouter"
             : `${entry.providerName}${page() !== "recommended" ? "" : entry === top ? " · recommended for coding" : entry === second ? " · another from this provider" : " · recommended from this provider"}`,
         category: page() === "all" ? entry.providerName : "Ready to use",
         footer: entry.footer,

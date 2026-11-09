@@ -170,6 +170,14 @@ describe("session.retry.retryable", () => {
     expect(updates).toBe(0)
   }))
 
+  test("does not retry a request larger than the per-minute token cap", () => {
+    const body = JSON.stringify({ error: { message: "Request too large for model openai/gpt-oss-120b on tokens per minute (TPM): Limit 8000, Requested 9508", type: "tokens", code: "rate_limit_exceeded" } })
+    const oversized = new SessionV1.APIError({ statusCode: 413, message: "This request exceeds this Groq account's token allowance (9508 requested; 8000 allowed).", isRetryable: false, responseBody: body }).toObject()
+    expect(SessionRetry.retryable(oversized, "groq")).toBeUndefined()
+    const temporary = new SessionV1.APIError({ statusCode: 429, message: "Rate limit reached", isRetryable: false, responseBody: body }).toObject()
+    expect(SessionRetry.retryable(temporary, "groq")).toBeDefined()
+  })
+
   test("retries serialized too_many_requests messages", () => {
     const error = wrap(JSON.stringify({ type: "error", error: { type: "too_many_requests" } }))
     expect(SessionRetry.retryable(error, retryProvider)).toEqual({ message: "Too Many Requests" })
