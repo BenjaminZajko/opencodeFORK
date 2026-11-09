@@ -9,7 +9,9 @@ import { Truncate } from "@/tool/truncate"
 import { Auth } from "../auth"
 import { ProviderTransform } from "@/provider/transform"
 
-import PROMPT_DESKTOP from "./prompt/desktop.txt"
+import PROMPT_DESKTOP_MAC from "./prompt/desktop.txt"
+import PROMPT_DESKTOP_PORTABLE from "./prompt/desktop-portable.txt"
+const PROMPT_DESKTOP = process.platform === "darwin" ? PROMPT_DESKTOP_MAC : PROMPT_DESKTOP_PORTABLE
 import PROMPT_COMPUTER from "./prompt/computer.txt"
 import PROMPT_GENERATE from "./generate.txt"
 import PROMPT_COMPACTION from "./prompt/compaction.txt"
@@ -156,7 +158,7 @@ const layer = Layer.effect(
             native: true,
           },
           desktop: {
-            name: "desktop", description: "Use macOS apps with the actual mouse and keyboard.",
+            name: "desktop", description: "Use accessible desktop apps with observed controls and approvals.",
             mode: "primary", native: true, options: {}, steps: 60,
             prompt: PROMPT_DESKTOP, color: "#68d5ae",
             permission: Permission.fromConfig({ "*": "deny", desktop: "ask", desktop_screenshot: "ask", question: "allow", todowrite: "allow" }),
@@ -165,9 +167,9 @@ const layer = Layer.effect(
             name: "computer",
             description: "Work with websites and supported apps using visible actions and approvals.",
             mode: "primary", native: true, options: {}, steps: 60,
-            prompt: process.platform === "darwin" ? `${PROMPT_COMPUTER}\n\nMAC APP CONTROL\n${PROMPT_DESKTOP.replace("You are OliveCode's macOS desktop operator.", "For Mac app work, act as OliveCode's desktop operator.").replace("You do not have shell, file, browser or MCP tools in this mode.", "The browser tool is also available for website work; shell, file and MCP tools remain unavailable.")}` : PROMPT_COMPUTER,
+            prompt: process.platform === "darwin" ? `${PROMPT_COMPUTER}\n\nMAC APP CONTROL\n${PROMPT_DESKTOP.replace("You are OliveCode's macOS desktop operator.", "For Mac app work, act as OliveCode's desktop operator.").replace("You do not have shell, file, browser or MCP tools in this mode.", "The browser tool is also available for website work; shell, file and MCP tools remain unavailable.")}` : `${PROMPT_COMPUTER}\n\nNATIVE APP CONTROL\n${PROMPT_DESKTOP_PORTABLE}`,
             color: "#68d5ae",
-            permission: Permission.fromConfig({ "*": "deny", browser: "ask", browser_screenshot: "ask", ...(process.platform === "darwin" ? { desktop: "ask", desktop_screenshot: "ask" } : {}), question: "allow", todowrite: "allow" }),
+            permission: Permission.fromConfig({ "*": "deny", browser: "ask", browser_screenshot: "ask", desktop: "ask", desktop_screenshot: "ask", question: "allow", todowrite: "allow" }),
           },
           computer_background: {
             name: "computer_background", description: "Work on websites in an isolated background browser while you use your desktop.",
@@ -179,7 +181,7 @@ const layer = Layer.effect(
           computer_background_mac: {
             name: "computer_background_mac", description: "Work with apps on an isolated background Mac and websites in a background browser.",
             mode: "primary", native: true, options: {}, steps: 60,
-            prompt: `${PROMPT_COMPUTER}\n${PROMPT_DESKTOP.replace("You do not have shell, file, browser or MCP tools in this mode.", "The browser tool is also available for headless website work; shell, file and MCP tools remain unavailable.")}\nISOLATED BACKGROUND MAC\nDesktop actions go only to the configured separate Mac/VM, never the user's main Mac. Browser actions are headless; no browser window stays visible. No shell/file/MCP tools are available. First check desktop status and explain any guest setup or login required. If the connection or isolation check fails, stop and request the exact setup needed; never switch to controlling the main Mac. Progress and approved window screenshots appear in chat. Guest file paths/apps belong to the isolated Mac and are not the user's host files/apps. User grants Accessibility and Screen Recording inside that guest. Setup opens settings there only.`,
+            prompt: `${PROMPT_COMPUTER}\n${PROMPT_DESKTOP_MAC.replace("You do not have shell, file, browser or MCP tools in this mode.", "The browser tool is also available for headless website work; shell, file and MCP tools remain unavailable.")}\nISOLATED BACKGROUND MAC\nDesktop actions go only to the configured separate Mac/VM, never the user's main Mac. Browser actions are headless; no browser window stays visible. No shell/file/MCP tools are available. First check desktop status and explain any guest setup or login required. If the connection or isolation check fails, stop and request the exact setup needed; never switch to controlling the main Mac. Progress and approved window screenshots appear in chat. Guest file paths/apps belong to the isolated Mac and are not the user's host files/apps. User grants Accessibility and Screen Recording inside that guest. Setup opens settings there only.`,
             color: "#68d5ae",
             permission: Permission.fromConfig({ "*": "deny", browser: "ask", browser_screenshot: "ask", desktop: "ask", desktop_screenshot: "ask", question: "allow", todowrite: "allow" }),
           },

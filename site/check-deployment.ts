@@ -16,7 +16,7 @@ await check('HTTP to HTTPS',async()=>{
   const {response}=await get('http://olivecode.dev/guide')
   if(![301,308].includes(response.status)||response.headers.get('location')!==origin+'/guide') throw Error('HTTPS redirect missing.')
 })
-for(const route of ['/','/guide','/privacy','/sponsors','/about','/terms']) await check('Page '+route,async()=>{
+for(const route of ['/','/guide','/privacy','/sponsors','/about','/terms','/models','/faq','/free-ai-coding-agent','/local-ai-coding']) await check('Page '+route,async()=>{
   const {response,text}=await get(origin+route)
   if(response.status!==200||!response.headers.get('content-type')?.includes('text/html')||!text.includes(`rel="canonical" href="${origin}${route}"`)) throw Error('Page status, type or canonical incorrect.')
   if(!response.headers.get('content-security-policy')||response.headers.get('x-content-type-options')!=='nosniff'||!response.headers.get('strict-transport-security')) throw Error('Security headers missing; check the host-specific build and deployment rules.')

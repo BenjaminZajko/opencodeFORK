@@ -2,7 +2,10 @@ import { useDialog } from "@opencode-ai/ui/context/dialog"
 import { Tooltip } from "@opencode-ai/ui/tooltip"
 import { Icon as IconV2 } from "@opencode-ai/ui/v2/icon"
 import { TooltipV2 } from "@opencode-ai/ui/v2/tooltip-v2"
-import { WordmarkV2 } from "@opencode-ai/ui/v2/wordmark-v2"
+import { OliveCodeStarters } from "../../components/olivecode-starters"
+import { usePrompt } from "../../context/prompt"
+import { useLocal } from "../../context/local"
+import { useSettings } from "../../context/settings"
 import { Show, createMemo, createSignal, type Accessor } from "solid-js"
 import { createStore } from "solid-js/store"
 import { Portal } from "solid-js/web"
@@ -31,41 +34,81 @@ export function NewSessionView(props: {
   project: PromptProjectController
   workspace: NewSessionWorkspaceController
 }) {
+  const language = useLanguage()
+  const prompt = usePrompt()
+  const local = useLocal()
+  const settings = useSettings()
+  const seed = (text: string) => {
+    prompt.set([{ type: "text", content: text, start: 0, end: text.length }], text.length)
+    props.input.restoreFocus()
+  }
+  const mode = (value: "plan" | "build") => {
+    settings.general.setShowCustomAgents(true)
+    local.agent.set(value)
+    props.input.restoreFocus()
+  }
   return (
     <div class="@container relative flex flex-col min-h-0 h-full flex-1">
       <div
         data-component="session-new-design"
         class="relative flex-1 min-h-0 overflow-hidden rounded-[10px] bg-v2-background-bg-deep"
       >
-        <div class="absolute inset-x-0 top-[25.375%] flex justify-center px-6">
-          <div class={NEW_SESSION_CONTENT_WIDTH}>
-            <WordmarkV2 class="h-auto w-full text-v2-background-bg-inverse" />
-            <div class="mt-8 flex flex-col gap-8">
-              <PromptInputV2Composer controller={props.input} />
-              <Show when={props.project.empty()}>
-                <PromptProjectAddButton controller={props.project} />
-              </Show>
-              <Show when={props.project.selected()}>
-                <div class="flex min-h-7 min-w-0 flex-col items-center justify-center gap-0 text-v2-text-text-faint sm:flex-row">
-                  <PromptProjectSelector controller={props.project} placement="bottom" />
-                  <Show
-                    when={props.workspace.bar.visible()}
-                    fallback={
-                      <PromptGitStatus branch={props.workspace.bar.branch()} noGit={!props.workspace.project.git()} />
-                    }
-                  >
-                    <PromptWorkspaceSelector
-                      value={props.workspace.selection.value()}
-                      projectRoot={props.workspace.project.root()}
-                      workspaces={props.workspace.project.workspaces()}
-                      branch={props.workspace.bar.branch()}
-                      onChange={props.workspace.selection.set}
-                      onDone={props.input.restoreFocus}
-                    />
-                  </Show>
-                </div>
-              </Show>
+        <div class="olive-new-session-position">
+          <div class={`${NEW_SESSION_CONTENT_WIDTH} olive-new-session-content`}>
+            <div class="olive-new-session-heading">
+              <h1>{language.t("olivecode.starter.heading")}</h1>
             </div>
+            <div class="olive-draft-composer flex flex-col gap-5">
+              <PromptInputV2Composer
+                controller={props.input}
+                agentControl={
+                  !local.agent.current() || ["build", "plan"].includes(local.agent.current()!.name) ? (
+                    <div class="olive-mode-picker" role="group" aria-label={language.t("olivecode.starter.mode")}>
+                      <button
+                        type="button"
+                        aria-pressed={local.agent.current()?.name === "build"}
+                        onClick={() => mode("build")}
+                      >
+                        {language.t("olivecode.starter.build")}
+                      </button>
+                      <button
+                        type="button"
+                        aria-pressed={local.agent.current()?.name === "plan"}
+                        onClick={() => mode("plan")}
+                      >
+                        {language.t("olivecode.starter.plan")}
+                      </button>
+                    </div>
+                  ) : undefined
+                }
+              />
+              <div class="olive-draft-context">
+                <Show when={props.project.empty()}>
+                  <PromptProjectAddButton controller={props.project} />
+                </Show>
+                <Show when={props.project.selected()}>
+                  <div class="flex min-h-7 min-w-0 flex-col items-center justify-center gap-0 text-v2-text-text-faint sm:flex-row">
+                    <PromptProjectSelector controller={props.project} placement="bottom" />
+                    <Show
+                      when={props.workspace.bar.visible()}
+                      fallback={
+                        <PromptGitStatus branch={props.workspace.bar.branch()} noGit={!props.workspace.project.git()} />
+                      }
+                    >
+                      <PromptWorkspaceSelector
+                        value={props.workspace.selection.value()}
+                        projectRoot={props.workspace.project.root()}
+                        workspaces={props.workspace.project.workspaces()}
+                        branch={props.workspace.bar.branch()}
+                        onChange={props.workspace.selection.set}
+                        onDone={props.input.restoreFocus}
+                      />
+                    </Show>
+                  </div>
+                </Show>
+              </div>
+            </div>
+            <OliveCodeStarters onChoose={seed} />
           </div>
         </div>
         <ProviderTip />

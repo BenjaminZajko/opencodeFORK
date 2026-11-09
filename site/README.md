@@ -1,6 +1,6 @@
 # OliveCode website
 
-The first screen uses the terminal pixel logo on neutral surfaces and centres on installation, selects macOS or Windows from browser platform hints, and offers an explicit OS switch. Supported Linux users can select the shell installer; mobile visitors get desktop guidance. Fonts and assets are local; there are no website ads or analytics.
+The first screen uses the terminal pixel logo on neutral surfaces and centres on installation, selects macOS or Windows from browser platform hints, and offers an explicit OS switch. Supported Linux users can select the shell installer; mobile visitors get desktop guidance. Fonts and assets are local; there are no website ads. Production on Cloudflare Pages permits its cookie-free Web Analytics beacon; previews and the alternative Websupport build do not enable it.
 
 Run `bun site/prepare.ts` from the repository root to prepare `site-dist/`. The output includes `/install` and `/install.ps1` plus public site assets. Install endpoints remain safely disabled until the public-release verification gate passes. Serve that folder using a static host. The source HTML can be inspected directly, but module scripts need an HTTP/HTTPS server.
 
@@ -20,7 +20,7 @@ bun site/check-launch.ts
 bun site/package.ts
 ```
 
-Upload `distribution/cloudflare/OliveCode-olivecode.dev-web.zip` using Pages Direct Upload; it includes `_headers` and `_redirects`, and no `.htaccess`. Configure hostname redirects separately in zone Redirect Rules. The ZIP contains public static files only. Do not upload the source repository, app credentials, databases, Computer helper or Remote/sponsor services. The site has no analytics or advertising trackers.
+Upload `distribution/cloudflare/OliveCode-olivecode.dev-web.zip` using Pages Direct Upload; it includes `_headers` and `_redirects`, and no `.htaccess`. Configure hostname redirects separately in zone Redirect Rules. The ZIP contains public static files only. Do not upload the source repository, app credentials, databases, Computer helper or Remote/sponsor services. The site uses cookie-free Cloudflare Web Analytics; there are no advertising trackers. Configure the production hostname in the Cloudflare Web Analytics dashboard with Enable with JS Snippet installation. The public beacon identifier lives in launch.json; never put a Cloudflare account API token there. The builder embeds exactly one beacon on production pages, and none on preview or Websupport builds. The CSP permits only its beacon script and collection origin, without allowing arbitrary third-party scripts.
 
 Default builds are noindex previews. Production builds include canonical URLs, metadata, share image, sitemap, security headers, domain redirects, clean page URLs and a real 404. Local preview supports the same clean page URLs without redirecting localhost. Cache versions prevent mixing old and new assets.
 
@@ -81,3 +81,22 @@ The original grove hero, installer and real terminal screenshot remain. A new ed
 The guide now includes Computer, Telegram pairing/setup, scoped 90-minute approvals, separate capture consent, /stop, /lock, /status and awake/listener requirements in all 14 built-in languages. Commands remain literal. Its default remains English. The privacy page discloses Telegram bot transport, captures and local credential handling. Background Mac stays a setup-required preview; native Windows app control is not advertised as available.
 
 Run check-remote.js with the same Playwright run-code mechanism as the other browser checks. It covers all mode choices, keyboard selection, ten responsive layouts, guide deep links, complete remote translations and privacy disclosure. Preview artifacts are docs/previews/site-remote-{dark,light}-{1440,375}.png.
+
+
+## Search and AI discovery
+
+The production site includes ten canonical HTML pages, including `/models` and `/faq`. Keep useful product facts in the rendered HTML; schema must agree with visible content. SoftwareApplication price zero describes the free app, not unlimited provider inference. Do not invent ratings for rich-result eligibility.
+
+Keep `googleSiteVerification` in `launch.json` while Google Search Console ownership uses its HTML tag. This verification identifier is public. The production homepage receives the tag; previews stay noindex. Release-ready guide notices are resolved consistently into raw HTML and all 14 translations.
+
+After a checked production deployment, `bun site/submit-indexnow.ts` previews the ten live canonical URLs and validates the public ownership file. Add `--submit` to notify IndexNow. An HTTP 200/202 is receipt, not proof of indexing. Preserve `indexnow-key.txt` across deployments. Submit the canonical sitemap in Search Console and use actual reports to assess indexing. No llms.txt or crawler security exceptions are needed by this implementation.
+
+Research, the fixed English/Slovak question panel and an empty observation template live in the parent project's `marketing/ai-discovery/2026-10-17/`. Do not report AI visibility lift until measured with recorded prompts, models, browsing conditions and repeated samples.
+
+The intent guide at `/free-ai-coding-agent` compares agent workflows without asserting a performance ranking. `/local-ai-coding` is the practical Ollama walkthrough. Keep the reproducible slugify example linked from the guide and publish its source/evidence before publishing those links. Only report results actually observed, with the release, provider/model identities, test cases and limitations.
+
+## Measurement
+
+Cloudflare Web Analytics provides browser visits, page views, referrals and page-performance estimates. Exclude bots in the dashboard and keep this distinct from zone-level Unique Visitors/request counts. Measurement starts when the beacon is working; it does not reconstruct old human visits. Blocking software and automated browsers still affect estimates. The public privacy page explains measurement.
+
+The `OliveCode download metrics` workflow records GitHub release-package counters daily, keeps JSON/Markdown artifacts for 90 days and puts a platform summary on each run. Its first observation is a baseline; later runs compare asset IDs with the previous saved snapshot. It excludes installer scripts, checksum files and videos. Counts can include tests and repeat downloads and are never labeled installations or users. No app/installer telemetry is added.

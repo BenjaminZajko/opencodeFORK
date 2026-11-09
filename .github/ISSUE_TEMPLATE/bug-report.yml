@@ -1,5 +1,5 @@
 name: Bug report
-description: Report an issue that should be fixed (avoid pasting giant AI generated summaries or your issue may be closed/ignored)
+description: Report an OliveCode problem with a small reproducible example.
 body:
   - type: textarea
     id: description
@@ -21,8 +21,8 @@ body:
   - type: input
     id: opencode-version
     attributes:
-      label: OpenCode version
-      description: What version of OpenCode are you using?
+      label: OliveCode version
+      description: What version does olivecode --version report?
     validations:
       required: false
 
@@ -42,7 +42,7 @@ body:
     id: screenshot-or-link
     attributes:
       label: Screenshot and/or share link
-      description: Run `/share` to get a share link, or attach a screenshot
+      description: Optionally attach a redacted screenshot or a short public reproduction; remove private code and secrets.
       placeholder: Paste link or drag and drop screenshot here
     validations:
       required: false

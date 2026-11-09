@@ -22,6 +22,30 @@ test("missing typing target never selects the TextEdit file-picker search field"
   expect(() => DesktopRequest.normalize({ action: "click", target: 1.5 }, document)).toThrow("target")
 })
 
+test("targeted Enter requires an explicitly observed confirmable enabled control", () => {
+  const box = { revision: 9, controls: [{ target: 5, role: "AXComboBox", name: "name box", enabled: true, confirmable: true }] }
+  expect(DesktopRequest.normalize({ action: "key", key: "enter", target: 5 }, box)).toEqual({ action: "key", key: "enter", target: 5, revision: 9 })
+  for (const request of [
+    { action: "key", key: "enter", target: 6 },
+    { action: "key", key: "a", target: 5 },
+    { action: "key", key: "enter", target: 5, modifiers: ["command"] },
+  ] as const) expect(() => DesktopRequest.normalize(request, box)).toThrow("confirmable")
+  expect(() => DesktopRequest.normalize({ action: "key", key: "enter", target: 5 }, { ...box, controls: [{ ...box.controls[0]!, enabled: false }] })).toThrow("confirmable")
+  expect(() => DesktopRequest.normalize({ action: "key", key: "enter", target: 5 }, dialog)).toThrow("confirmable")
+  expect(DesktopRequest.normalize({ action: "key", key: "enter" }, dialog)).toEqual({ action: "key", key: "enter", revision: 7 })
+})
+
+test("Excel selection labels must agree before formula-bar text can be sent", () => {
+  const sheet = { revision: 10, bundle: "com.microsoft.Excel", controls: [
+    { target: 5, role: "AXComboBox", name: "name box", value: "A4", enabled: true },
+    { target: 7, role: "AXTextArea", name: "Formula Bar. A,3 ", enabled: true },
+  ] }
+  expect(() => DesktopRequest.normalize({ action: "fill", target: 7, text: "=SUM(A2:A3)" }, sheet)).toThrow("disagree")
+  const selected = { ...sheet, controls: [sheet.controls[0]!, { ...sheet.controls[1]!, name: "Formula Bar. A,4 " }] }
+  expect(DesktopRequest.normalize({ action: "fill", target: 7, text: "=SUM(A2:A3)" }, selected).revision).toBe(10)
+  expect(() => DesktopRequest.normalize({ action: "type", target: 7, text: "12" }, { ...sheet, controls: [sheet.controls[1]!] })).toThrow("disagree")
+})
+
 test("permission acknowledgements retain the original desktop goal for completion review", () => {
   const task = "Open TextEdit, create a document, type Hello from OliveCode, verify the text, and leave it unsaved."
   const messages = [
@@ -34,6 +58,18 @@ test("permission acknowledgements retain the original desktop goal for completio
   expect(Coordination.worthCoordinating(request)).toBe(true)
   expect(Coordination.resumedRequest("What is TextEdit?", messages, "desktop")).toBe("What is TextEdit?")
   expect(Coordination.resumedRequest("I enabled it", messages, "build")).toBe("I enabled it")
+  expect(Coordination.resumedRequest("I am giving you permission that you can access those things", messages, "desktop")).toContain(task)
+})
+
+test("Ubuntu app-control refusal needs actual desktop capability evidence", () => {
+  const messages = [
+    { info: { role: "user" }, parts: [{ type: "text", text: "Can you control Codex and Claude Code? Read my current Codex conversation." }] },
+    { info: { role: "assistant" }, parts: [{ type: "text", text: "I do not have access to native desktop tools. Please share a website URL." }] },
+  ] as unknown as SessionV1.WithParts[]
+  expect(Coordination.failedComputerAction(messages, "computer")).toContain("desktop status")
+  expect(Coordination.failedComputerAction(messages, "computer_background")).toBeUndefined()
+  messages[1]!.parts.push({ type: "tool", tool: "desktop", state: { status: "completed", input: { action: "status" }, output: JSON.stringify({ platform: "Linux", ready: false, setup: "Install pyatspi" }) } } as unknown as SessionV1.ToolPart)
+  expect(Coordination.failedComputerAction(messages, "computer")).toBeUndefined()
 })
 
 test("later observations cannot turn a failed typing attempt into action success", () => {
@@ -43,6 +79,13 @@ test("later observations cannot turn a failed typing attempt into action success
   ] }] as unknown as SessionV1.WithParts[]
   expect(Coordination.failedComputerAction(messages)).toContain("type action failed")
   messages[0].parts.push({ type: "tool", tool: "desktop", state: { status: "completed", input: { action: "type" }, output: "Hello from OliveCode" } } as unknown as SessionV1.ToolPart)
+  expect(Coordination.failedComputerAction(messages)).toBeUndefined()
+})
+
+test("Excel edit text needs a commit before completion", () => {
+  const messages = [{ parts: [{ type: "tool", tool: "desktop", state: { status: "completed", input: { action: "fill" }, output: JSON.stringify({ bundle: "com.microsoft.Excel", cellEntry: { address: "A2", text: "15", needsCommit: true } }) } }] }] as unknown as SessionV1.WithParts[]
+  expect(Coordination.failedComputerAction(messages)).toContain("Press Enter")
+  messages[0]!.parts.push({ type: "tool", tool: "desktop", state: { status: "completed", input: { action: "key", key: "enter" }, output: JSON.stringify({ bundle: "com.microsoft.Excel", controls: [] }) } } as unknown as SessionV1.ToolPart)
   expect(Coordination.failedComputerAction(messages)).toBeUndefined()
 })
 
@@ -145,4 +188,51 @@ test("verified distinct pointer moves remain complete after a rejected unnecessa
   messages[1].parts.splice(2, 1, move(400, 200) as unknown as SessionV1.ToolPart)
   messages[1].parts.splice(0, 0, { type: "tool", tool: "desktop", state: { status: "completed", input: { action: "key", key: "n" }, output: "{}" } } as unknown as SessionV1.ToolPart)
   expect(Coordination.failedComputerAction(messages)).toContain("move action failed")
+})
+
+
+test("TextEdit completion requires an observed saved file, not a duplicated window title", () => {
+  const observation = { bundle: "com.apple.TextEdit", windowAvailable: true, revision: 8, title: "Report copy", controls: [] }
+  const messages = [
+    { info: { role: "user" }, parts: [{ type: "text", text: "Use TextEdit to write a report and save it as Report.rtf" }] },
+    { info: { role: "assistant" }, parts: [{ type: "tool", tool: "desktop", state: { status: "completed", input: { action: "key", key: "s", modifiers: ["command", "shift"] }, output: JSON.stringify(observation) } }] },
+  ] as unknown as SessionV1.WithParts[]
+  expect(Coordination.failedComputerAction(messages)).toContain("save is not verified")
+  const part = messages[1].parts[0] as SessionV1.ToolPart
+  if (part.state.status !== "completed") throw new Error("fixture state")
+  part.state.output = JSON.stringify({ ...observation, documentURL: "file:///tmp/Wrong.rtf", documentModified: false })
+  expect(Coordination.failedComputerAction(messages)).toContain("save is not verified")
+  part.state.output = JSON.stringify({ ...observation, documentURL: "file:///tmp/Report.rtf", documentModified: true })
+  expect(Coordination.failedComputerAction(messages)).toContain("save is not verified")
+  part.state.output = JSON.stringify({ ...observation, documentURL: "file:///tmp/Report.rtf", documentModified: false })
+  expect(Coordination.failedComputerAction(messages)).toBeUndefined()
+})
+
+test("TextEdit tasks explicitly left unsaved do not require a file URL", () => {
+  const messages = [
+    { info: { role: "user" }, parts: [{ type: "text", text: "In TextEdit write a note. Do not save it." }] },
+    { info: { role: "assistant" }, parts: [{ type: "tool", tool: "desktop", state: { status: "completed", input: { action: "fill" }, output: JSON.stringify({ bundle: "com.apple.TextEdit", controls: [], windowAvailable: true }) } }] },
+  ] as unknown as SessionV1.WithParts[]
+  expect(Coordination.failedComputerAction(messages)).toBeUndefined()
+})
+
+test("saved TextEdit reports must match the requested destination, including spaces and Unicode", () => {
+  const part = { type: "tool", tool: "desktop", state: { status: "completed", input: { action: "observe" }, output: "" } }
+  const request = { type: "text", text: "Use TextEdit and save the report as Report.rtf. Workspace: /tmp/OliveCode QA/Žilina" }
+  const messages = [
+    { info: { role: "user" }, parts: [request] },
+    { info: { role: "assistant" }, parts: [part] },
+  ] as unknown as SessionV1.WithParts[]
+  const observed = (file: string) => {
+    part.state.output = JSON.stringify({ bundle: "com.apple.TextEdit", windowAvailable: true, controls: [], documentURL: new URL(file, "file://").href, documentModified: false })
+    return Coordination.failedComputerAction(messages)
+  }
+  expect(observed("/tmp/Wrong/Report.rtf")).toContain("save is not verified")
+  expect(observed("/tmp/OliveCode QA/Žilina extra/Report.rtf")).toContain("save is not verified")
+  expect(observed("/tmp/OliveCode QA/Žilina/Report.rtf")).toBeUndefined()
+  request.text = 'In TextEdit save the report to "/tmp/OliveCode QA/Žilina/Final Report.rtf".'
+  expect(observed("/tmp/OliveCode QA/Žilina/Report.rtf")).toContain("save is not verified")
+  expect(observed("/tmp/OliveCode QA/Žilina/Final Report.rtf")).toBeUndefined()
+  // Cocoa reports decomposed filenames even when the user supplied NFC text.
+  expect(observed("/tmp/OliveCode QA/Žilina/Final Report.rtf".normalize("NFD"))).toBeUndefined()
 })

@@ -5,7 +5,7 @@ from pathlib import Path
 from urllib.parse import urlsplit
 import re
 
-ROUTES = {"guide", "privacy", "sponsors", "about", "terms"}
+ROUTES = {"try", "guide", "privacy", "sponsors", "about", "terms", "models", "faq", "free-ai-coding-agent", "local-ai-coding"}
 
 class PreviewHandler(SimpleHTTPRequestHandler):
     def end_headers(self):

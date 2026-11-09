@@ -81,6 +81,14 @@ describe("listOllamaModels", () => {
 })
 
 describe("pullOllamaModel", () => {
+  it("stops an active download when its request is cancelled", async () => {
+    const file = fakeBin('echo "pulling manifest" >&2; exec sleep 30')
+    const abort = new AbortController()
+    const result = await pullOllamaModel(file, "qwen3:8b", () => abort.abort(), abort.signal)
+    expect(result.ok).toBe(false)
+    expect(result.error?.toLowerCase()).toContain("abort")
+  })
+
   it("streams progress lines then succeeds", async () => {
     const file = fakeBin('echo "pulling manifest" >&2; echo "success" >&2')
     const lines: string[] = []

@@ -301,7 +301,7 @@ const layer = Layer.effect(
       const filtered = (yield* all()).filter((tool) => {
         if (input.agent.name === "desktop") return ["desktop", "question", "todowrite", "invalid"].includes(tool.id)
         if (input.agent.name === "computer_background") return ["browser", "question", "todowrite", "invalid"].includes(tool.id)
-        if (["computer", "computer_background_mac"].includes(input.agent.name)) return ["browser", ...(process.platform === "darwin" ? ["desktop"] : []), "question", "todowrite", "invalid"].includes(tool.id)
+        if (["computer", "computer_background_mac"].includes(input.agent.name)) return ["browser", "desktop", "question", "todowrite", "invalid"].includes(tool.id)
         if (["browser", "desktop"].includes(tool.id)) return false
         if (tool.id === WebSearchTool.id) {
           return webSearchEnabled(input.providerID, { exa: flags.enableExa, parallel: flags.enableParallel })

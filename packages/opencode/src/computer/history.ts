@@ -3,7 +3,7 @@ export function historicalObservation(output: string): string {
   try {
     const value = JSON.parse(output)
     if (!value || typeof value !== "object" || Array.isArray(value)) return output.slice(0, 2000)
-    const keep = ["app", "bundle", "title", "revision", "windowAvailable", "cursor", "bounds", "coordinateSystem", "documentModified", "inputSent", "needsObservation", "accessibility", "screenRecording", "url", "tab", "tabId"]
+    const keep = ["app", "bundle", "title", "revision", "windowAvailable", "cursor", "bounds", "coordinateSystem", "documentModified", "documentURL", "inputSent", "needsObservation", "accessibility", "screenRecording", "url", "tab", "tabId"]
     const summary: Record<string, unknown> = { historical: true, note: "Earlier result: target IDs and screenshots omitted. Use the latest observation before acting." }
     for (const key of keep) if (value[key] !== undefined) summary[key] = value[key]
     if (typeof value.text === "string") summary.text = value.text.slice(0, 1500)

@@ -48,7 +48,8 @@ class Fixture(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(b'''<!doctype html><title>Browser integration fixture</title>
         <label>Name <input aria-label="Name"></label>
-        <button onclick="document.querySelector('p').textContent='Saved: '+document.querySelector('input').value">Save</button><p>Not saved</p>''')
+        <select aria-label="Country"><option value="sk">Slovakia</option><option value="cz">Czechia</option></select>
+        <button onclick="document.querySelector('p').textContent='Saved: '+document.querySelector('input').value+' / '+document.querySelector('select').value">Save</button><p>Not saved</p>''')
 
     def do_POST(self):
         body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
@@ -136,6 +137,10 @@ class Fixture(BaseHTTPRequestHandler):
                 field = next(item for item in page["controls"] if item["name"] == "Name")
                 if field.get("value") != "OliveCode":
                     call = {"action": "fill", "target": field["target"], "revision": page["revision"], "text": "OliveCode"}
+                elif "select" not in prior:
+                    dropdown = next(item for item in page["controls"] if item["name"] == "Country")
+                    assert any(option["value"] == "cz" for option in dropdown["options"])
+                    call = {"action": "select", "target": dropdown["target"], "revision": page["revision"], "text": "Czechia"}
                 else:
                     button = next(item for item in page["controls"] if item["name"] == "Save")
                     call = {"action": "click", "target": button["target"], "revision": page["revision"]}
@@ -228,11 +233,11 @@ try:
             if isinstance(final, Exception):
                 raise final
             assert len(approved) == 2, (approved, events)
-            assert all(action in events for action in ("plan", "open", "new_tab", "switch_tab", "fill", "click", "screenshot", "review", "complete")), events
+            assert all(action in events for action in ("plan", "open", "new_tab", "switch_tab", "fill", "select", "click", "screenshot", "review", "complete")), events
             history = request(f"/session/{session}/message")
             actions = [part for message in history for part in message["parts"] if part.get("tool") == "browser"]
-            assert len(actions) == 6 and all(part["state"]["status"] == "completed" for part in actions), actions
-            assert "Saved: OliveCode" in actions[-1]["state"]["output"], actions[-1]
+            assert len(actions) == 7 and all(part["state"]["status"] == "completed" for part in actions), actions
+            assert "Saved: OliveCode / cz" in actions[-1]["state"]["output"], actions[-1]
             attachments = actions[-1]["state"].get("attachments", [])
             assert len(attachments) == 1 and attachments[0]["url"].startswith("data:image/png;base64,"), actions[-1]["state"].keys()
             assert "base64" not in actions[-1]["state"]["output"], "Image was dumped into text"

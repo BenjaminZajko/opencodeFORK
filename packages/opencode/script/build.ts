@@ -212,6 +212,8 @@ for (const item of targets) {
     ],
     define: {
       OLIVECODE_DESKTOP_HELPER: JSON.stringify(desktopHelper),
+      OLIVECODE_WINDOWS_DESKTOP: JSON.stringify(Buffer.from(await Bun.file("src/computer/native/desktop-windows.ps1").arrayBuffer()).toString("base64")),
+      OLIVECODE_LINUX_DESKTOP: JSON.stringify(Buffer.from(await Bun.file("src/computer/native/desktop-linux.py").arrayBuffer()).toString("base64")),
       OLIVECODE_VM_MANAGER: JSON.stringify(vmManager),
       FFF_LIBC: JSON.stringify(item.abi === "musl" ? "musl" : "gnu"),
       OPENCODE_VERSION: `'${Script.version}'`,

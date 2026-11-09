@@ -1,4 +1,5 @@
 import "@/index.css"
+import "./olivecode.css"
 import * as Sentry from "@sentry/solid"
 import { I18nProvider } from "@opencode-ai/ui/context"
 import { DialogProvider } from "@opencode-ai/ui/context/dialog"
@@ -400,6 +401,7 @@ export function AppBaseProviders(
     <MetaProvider>
       <Font />
       <ThemeProvider
+        defaultTheme="olivecode"
         onThemeApplied={(_, mode, scheme) => {
           void window.api?.setTitlebar?.({ mode, scheme })
         }}

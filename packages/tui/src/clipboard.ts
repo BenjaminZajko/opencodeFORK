@@ -3,6 +3,7 @@ import { readFile, rm } from "node:fs/promises"
 import { platform, release, tmpdir } from "node:os"
 import path from "node:path"
 import { promisify } from "node:util"
+import { writeGtk } from "./clipboard-linux"
 
 const exec = promisify(execFile)
 
@@ -10,9 +11,12 @@ function command(command: string, args: string[] = [], input?: string) {
   return new Promise<Buffer>((resolve, reject) => {
     const child = spawn(command, args, { stdio: [input === undefined ? "ignore" : "pipe", "pipe", "ignore"] })
     const output: Buffer[] = []
+    const timer = setTimeout(() => { child.kill(); reject(new Error(`${command} did not respond`)) }, 5000)
     child.on("error", reject)
+    child.stdin?.on("error", reject)
     child.stdout?.on("data", (chunk: Buffer) => output.push(chunk))
     child.on("close", (code) => {
+      clearTimeout(timer)
       if (code === 0) return resolve(Buffer.concat(output))
       reject(new Error(`${command} exited with code ${code}`))
     })
@@ -20,11 +24,17 @@ function command(command: string, args: string[] = [], input?: string) {
   })
 }
 
+export function supportsOsc52(env: NodeJS.ProcessEnv) {
+  if (env.VTE_VERSION || env.TERM_PROGRAM === "gnome-terminal" || env.STY) return false
+  return env.OLIVECODE_OSC52 === "1" || ["iTerm.app", "WezTerm", "ghostty", "vscode"].includes(env.TERM_PROGRAM ?? "") || env.TERM === "xterm-kitty"
+}
+
 function writeOsc52(text: string) {
-  if (!process.stdout.isTTY) return
+  if (!process.stdout.isTTY || !supportsOsc52(process.env)) return false
   const sequence = `\x1b]52;c;${Buffer.from(text).toString("base64")}\x07`
   const passthrough = `\x1bPtmux;\x1b${sequence}\x1b\\`
   process.stdout.write(process.env.TMUX ? sequence + passthrough : process.env.STY ? passthrough : sequence)
+  return true
 }
 
 export async function read() {
@@ -79,7 +89,7 @@ export function copyCommand(
   wayland: boolean,
   has: (name: string) => boolean,
 ): string[] | undefined {
-  if (os === "darwin" && has("osascript")) return ["osascript"]
+  if (os === "darwin" && has("pbcopy")) return ["pbcopy"]
   if (os === "linux" && wayland && has("wl-copy")) return ["wl-copy"]
   if (os === "linux" && has("xclip")) return ["xclip", "-selection", "clipboard"]
   if (os === "linux" && has("xsel")) return ["xsel", "--clipboard", "--input"]
@@ -88,38 +98,45 @@ export function copyCommand(
       "powershell.exe",
       "-NonInteractive",
       "-NoProfile",
+      "-STA",
       "-Command",
       "[Console]::InputEncoding = [System.Text.Encoding]::UTF8; Set-Clipboard -Value ([Console]::In.ReadToEnd())",
     ]
   }
 }
 
-let copyMethod: Promise<(text: string) => Promise<void>> | undefined
-
-function getCopyMethod() {
-  return (copyMethod ??= (async () => {
-    const { which } = await import("@opencode-ai/core/util/which")
-    const native = copyCommand(platform(), Boolean(process.env.WAYLAND_DISPLAY), (name) => Boolean(which(name)))
-    if (native?.[0] === "osascript") {
-      return async (text: string) => {
-        const escaped = text.replace(/\\/g, "\\\\").replace(/"/g, '\\"')
-        await command("osascript", ["-e", `set the clipboard to "${escaped}"`]).catch(() => undefined)
-      }
-    }
-    if (native) {
-      return async (text: string) => {
-        await command(native[0], native.slice(1), text).catch(() => undefined)
-      }
-    }
-    return async (text: string) => {
-      const { default: clipboardy } = await import("clipboardy")
-      await clipboardy.write(text).catch(() => undefined)
-    }
-  })())
+export async function copyUsing(text: string, options: {
+  os: NodeJS.Platform
+  wayland: boolean
+  has: (name: string) => boolean
+  run: (binary: string, args: string[], input: string) => Promise<unknown>
+  fallback: (text: string) => Promise<unknown>
+  gtk?: (text: string) => Promise<unknown>
+  terminal?: (text: string) => boolean
+}) {
+  const available = new Set(["pbcopy", "wl-copy", "xclip", "xsel", "powershell.exe"].filter(options.has))
+  while (available.size) {
+    const native = copyCommand(options.os, options.wayland, (name) => available.has(name))
+    if (!native) break
+    available.delete(native[0]!)
+    try { await options.run(native[0]!, native.slice(1), text); return }
+    catch { /* A found but broken backend must not be reported as a copy. */ }
+  }
+  if (options.os === "linux" && options.gtk) {
+    try { await options.gtk(text); return } catch {}
+  }
+  try { await options.fallback(text); return } catch {}
+  if (options.terminal?.(text)) return
+  throw new Error(options.os === "linux"
+    ? "Copy failed. Ubuntu needs a desktop clipboard: install wl-clipboard (Wayland) or xclip (X11), then retry. Selected text was kept."
+    : "Copy failed. The system clipboard is unavailable. Selected text was kept; try again.")
 }
 
 export async function write(text: string) {
-  writeOsc52(text)
-  const method = await getCopyMethod()
-  await method(text)
+  const { which } = await import("@opencode-ai/core/util/which")
+  await copyUsing(text, {
+    os: platform(), wayland: Boolean(process.env.WAYLAND_DISPLAY), has: (name) => Boolean(which(name)), run: command,
+    gtk: writeGtk, terminal: writeOsc52,
+    fallback: async (value) => { const { default: clipboardy } = await import("clipboardy"); await clipboardy.write(value) },
+  })
 }

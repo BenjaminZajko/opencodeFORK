@@ -766,6 +766,28 @@ it.instance("loop stops provider overflow instead of auto-compacting when disabl
   }),
 )
 
+it.instance("loop stops repeated provider overflow after two unsuccessful automatic compactions", () =>
+  Effect.gen(function* () {
+    const { llm } = yield* useServerConfig(providerCfg)
+    const prompt = yield* SessionPrompt.Service
+    const sessions = yield* Session.Service
+    const chat = yield* sessions.create({ title: "Pinned" })
+    for (let attempt = 0; attempt < 3; attempt++) {
+      yield* llm.error(413, { error: { message: "request entity too large" } })
+      if (attempt < 2) yield* llm.text("Retained task: say hello. No tools have run.")
+    }
+    yield* prompt.prompt({ sessionID: chat.id, agent: "build", noReply: true, parts: [{ type: "text", text: "hello" }] })
+    const result = yield* prompt.loop({ sessionID: chat.id }).pipe(Effect.timeout("5 seconds"))
+    expect(yield* llm.hits).toHaveLength(5)
+    expect(result.info.role).toBe("assistant")
+    if (result.info.role === "assistant") {
+      expect(result.info.finish).toBe("error")
+      expect(result.info.error?.name).toBe("ContextOverflowError")
+      if (result.info.error?.name === "ContextOverflowError") expect(result.info.error.data.message).toContain("two automatic compactions")
+    }
+  }),
+)
+
 noLLMServer.instance.skip(
   "prompt emits v2 prompted and synthetic events (v2 projector disabled)",
   () =>

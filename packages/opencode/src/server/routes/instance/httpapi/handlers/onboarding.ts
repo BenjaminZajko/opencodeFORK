@@ -116,10 +116,15 @@ export const onboardingHandlers = HttpApiBuilder.group(InstanceHttpApi, "onboard
       }
       const queue = yield* Queue.unbounded<string>()
       const finish = (line: string) => Queue.offer(queue, line).pipe(Effect.andThen(Queue.shutdown(queue)))
-      yield* Effect.promise(() =>
-        pullOllamaModel(binary, ctx.payload.model, (line) => {
-          Queue.offerUnsafe(queue, sseLine(line))
-        }),
+      yield* Effect.promise((signal) =>
+        pullOllamaModel(
+          binary,
+          ctx.payload.model,
+          (line) => {
+            Queue.offerUnsafe(queue, sseLine(line))
+          },
+          signal,
+        ),
       ).pipe(
         Effect.flatMap((result) =>
           finish(sseLine(JSON.stringify(result.ok ? { done: true } : { done: false, error: result.error }))),

@@ -13,6 +13,8 @@ permissions:
 
 jobs:
   close-non-compliant:
+    # Upstream moderation rules and paid model credentials do not apply to OliveCode.
+    if: github.repository == 'anomalyco/opencode'
     runs-on: ubuntu-latest
     steps:
       - name: Close non-compliant issues and PRs after 2 hours

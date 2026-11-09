@@ -1,6 +1,8 @@
 # OliveCode distribution
 
-The macOS, Windows and Linux installers place OliveCode under the user's home directory and expose `olivecode` on the command path. Invoking it inside a project opens that exact current directory. Supported CPUs are x64 and ARM64. Linux has glibc and musl packages; x64 release builds use Bun baseline targets for broader CPU compatibility. This does not support 32-bit PCs, Android/iOS terminals, or every older OS.
+The macOS, Windows and Linux installers place OliveCode under the user's home directory and expose `olivecode` on the command path. Invoking it inside a project opens that exact current directory. Supported CPUs are x64 and ARM64. Linux has glibc and musl packages; x64 release builds use Bun baseline targets for broader CPU compatibility. The current macOS packages require **macOS 13 or newer**, for both Intel and Apple Silicon. The one-command installer detects macOS with `sw_vers`, selects the native CPU package (including when run under Rosetta), and refuses unsupported/unknown macOS versions before downloading anything or changing an existing install. Intel/baseline describes CPU instructions; it does not mean Catalina support. A verified Catalina-compatible runtime/package does not currently exist. macOS Computer helpers have their own newer requirements.
+
+This does not support 32-bit PCs, Android/iOS terminals, or every older OS.
 
 Build a target with `bun run --cwd packages/opencode script/build.ts --target=darwin-arm64` (or `windows-x64`, `windows-arm64`, `linux-x64`, `linux-arm64`), then package it with `bun distribution/package.ts <target>`. Package names are stable so the installers can use `releases/latest/download` without knowing the version. Publish the archive, its `.sha256`, `install.sh`, `install.ps1` and the native-workflow-generated `release-verification.json` together in one release.
 

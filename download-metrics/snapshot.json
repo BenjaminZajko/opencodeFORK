@@ -1,0 +1,94 @@
+{
+  "schema": 1,
+  "repository": "BenjaminZajko/opencodeFORK",
+  "capturedAt": "2026-10-21T12:31:50.330Z",
+  "previousCapturedAt": null,
+  "totalPackageDownloads": 43,
+  "comparableAssetIncrease": null,
+  "newAssetBaseline": null,
+  "platforms": [
+    {
+      "platform": "macOS",
+      "downloads": 12,
+      "comparableAssetIncrease": null
+    },
+    {
+      "platform": "Windows",
+      "downloads": 11,
+      "comparableAssetIncrease": null
+    },
+    {
+      "platform": "Linux",
+      "downloads": 20,
+      "comparableAssetIncrease": null
+    }
+  ],
+  "assets": [
+    {
+      "id": 647533404,
+      "name": "OliveCode-Linux-arm64-musl.zip",
+      "tag": "v0.1.0",
+      "platform": "Linux",
+      "architecture": "arm64-musl",
+      "downloads": 5
+    },
+    {
+      "id": 647533406,
+      "name": "OliveCode-Linux-arm64.zip",
+      "tag": "v0.1.0",
+      "platform": "Linux",
+      "architecture": "arm64",
+      "downloads": 5
+    },
+    {
+      "id": 647533403,
+      "name": "OliveCode-Linux-x64-musl.zip",
+      "tag": "v0.1.0",
+      "platform": "Linux",
+      "architecture": "x64-musl",
+      "downloads": 5
+    },
+    {
+      "id": 647533510,
+      "name": "OliveCode-Linux-x64.zip",
+      "tag": "v0.1.0",
+      "platform": "Linux",
+      "architecture": "x64",
+      "downloads": 5
+    },
+    {
+      "id": 647534117,
+      "name": "OliveCode-macOS-arm64.zip",
+      "tag": "v0.1.0",
+      "platform": "macOS",
+      "architecture": "arm64",
+      "downloads": 7
+    },
+    {
+      "id": 647534523,
+      "name": "OliveCode-macOS-x64.zip",
+      "tag": "v0.1.0",
+      "platform": "macOS",
+      "architecture": "x64",
+      "downloads": 5
+    },
+    {
+      "id": 647533576,
+      "name": "OliveCode-Windows-arm64.zip",
+      "tag": "v0.1.0",
+      "platform": "Windows",
+      "architecture": "arm64",
+      "downloads": 5
+    },
+    {
+      "id": 647534082,
+      "name": "OliveCode-Windows-x64.zip",
+      "tag": "v0.1.0",
+      "platform": "Windows",
+      "architecture": "x64",
+      "downloads": 6
+    }
+  ],
+  "warnings": [],
+  "definition": "GitHub software archive download counters; excludes scripts, checksums and videos. Includes tests, bots and repeat downloads. Not unique people, installations or active users. Increases compare the same asset IDs over the actual snapshot interval; new assets begin a separate baseline."
+}

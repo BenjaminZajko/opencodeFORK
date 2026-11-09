@@ -21,7 +21,7 @@ describe("opencode acp initialize/auth subprocess", () => {
         expect(initialized.agentCapabilities?.sessionCapabilities?.fork).toEqual({})
         expect(initialized.agentCapabilities?.sessionCapabilities?.list).toEqual({})
         expect(initialized.agentCapabilities?.sessionCapabilities?.resume).toEqual({})
-        expect(initialized.agentInfo?.name).toBe("OpenCode")
+        expect(initialized.agentInfo?.name).toBe("OliveCode")
       }),
     60_000,
   )
@@ -34,7 +34,12 @@ describe("opencode acp initialize/auth subprocess", () => {
         const initialized = yield* initialize(acp)
 
         expect(initialized.authMethods?.[0]?.id).toBe("opencode-login")
-        expect(initialized.authMethods?.[0]?._meta?.["terminal-auth"]).toBeDefined()
+        expect(initialized.authMethods?.[0]?._meta?.["terminal-auth"]).toEqual({
+          command: "olivecode",
+          args: ["auth", "login"],
+          label: "OliveCode Login",
+        })
+        expect(initialized.authMethods?.[0]?.description).toContain("olivecode auth login")
         expect(yield* acp.request<AuthenticateResponse>("authenticate", { methodId: "opencode-login" })).toMatchObject({
           result: {},
         })

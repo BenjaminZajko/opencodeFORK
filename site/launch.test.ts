@@ -57,6 +57,12 @@ describe('public launch',()=>{
    await buildSite({production:true,releaseReady:true,proofPath,output})
    expect((await checkLaunch(output)).downloads).toBe('verified-release')
    expect(await readFile(path.join(output,'install'),'utf8')).toContain('releases/latest/download')
+   const guide=await readFile(path.join(output,'guide.html'),'utf8')
+   expect(guide).toContain('Public preview for macOS, Windows and Linux.')
+   expect(guide).not.toContain('Linux packages are not published')
+   const translated=await import(path.join(output,'guide-copy.js'))
+   expect(translated.languages.sk[1][4]).toContain('Verejná ukážka')
+   expect(translated.languages.en[1][4]).toBe(/<p data-guide-text="4">([^<]+)<\/p>/.exec(guide)![1])
    proof.scriptHashes['install.sh']='bad';await writeFile(proofPath,JSON.stringify(proof))
    await expect(buildSite({production:true,releaseReady:true,proofPath,output})).rejects.toThrow('differs')
   } finally {await rm(folder,{recursive:true,force:true})}
@@ -77,12 +83,49 @@ describe('public launch',()=>{
    expect(await readFile(path.join(output,'privacy.html'),'utf8')).toContain('Websupport remains the domain registrar')
    const redirects=await readFile(path.join(output,'_redirects'),'utf8')
    expect(redirects).toContain('/guide.html /guide 301')
+   for(const channel of ['instagram','youtube','community']) {
+    const campaign=await readFile(path.join(output,`try-${channel}.html`),'utf8')
+    expect(campaign).toContain('rel="canonical" href="https://olivecode.dev/try"')
+    expect(campaign).toContain('content="noindex,follow"')
+    expect(campaign).toContain(`feedback%20%28${channel}%29`)
+    expect((campaign.match(/beacon.min.js/g)||[]).length).toBe(1)
+    expect(redirects).toContain(`/try-${channel}.html /try-${channel} 301`)
+    expect(await readFile(path.join(output,'sitemap.xml'),'utf8')).not.toContain(`/try-${channel}`)
+   }
+
    expect(redirects.split('\n').some(line=>/^https?:/.test(line))).toBe(false)
    await writeFile(path.join(output,'_headers'),headers+'\n'+'x'.repeat(2001))
    await expect(checkLaunch(output)).rejects.toThrow('2,000-character limit')
    await writeFile(path.join(output,'_headers'),headers)
    await writeFile(path.join(output,'_worker.js'),'private code fixture')
    await expect(checkLaunch(output)).rejects.toThrow('Unexpected public file')
+  } finally {await rm(folder,{recursive:true,force:true})}
+ },30000)
+ test('discovery pages are static, linked, canonical and protected by matching CSP hashes',async()=>{
+  const folder=await mkdtemp(path.join(tmpdir(),'olivecode-discovery-'));const output=path.join(folder,'public')
+  try {
+   await buildSite({production:true,releaseReady:false,host:'Cloudflare Pages',output})
+   await checkLaunch(output)
+   const headers=await readFile(path.join(output,'_headers'),'utf8')
+   const sitemap=await readFile(path.join(output,'sitemap.xml'),'utf8')
+   for(const name of ['index.html','guide.html','about.html','models.html','faq.html','free-ai-coding-agent.html','local-ai-coding.html']) {
+    const html=await readFile(path.join(output,name),'utf8')
+    const schema=/<script type="application\/ld\+json">([\s\S]*?)<\/script>/.exec(html)![1]!
+    const graph=JSON.parse(schema)['@graph']
+    expect(graph[1]['@id']).toBe('https://olivecode.dev/#software')
+    expect(graph[1].offers.price).toBe(0)
+    expect(graph[1].aggregateRating).toBeUndefined()
+    expect(headers).toContain('sha256-'+createHash('sha256').update(schema).digest('base64'))
+    expect(html).toContain('href="/models"')
+    expect(html).toContain('href="/faq"')
+   }
+   for(const route of ['models','faq','free-ai-coding-agent','local-ai-coding']) {
+    expect(sitemap).toContain('<loc>https://olivecode.dev/'+route+'</loc>')
+    expect(headers).toContain('/'+route+'\n  Cache-Control: no-cache')
+   }
+   expect(await readFile(path.join(output,'models.html'),'utf8')).toContain('/usr/share/ollama/.ollama/models')
+   expect(await readFile(path.join(output,'faq.html'),'utf8')).toContain('Cloud providers still have')
+   expect((await readFile(path.join(output,'indexnow-key.txt'),'utf8')).trim()).toMatch(/^[a-f0-9]{32}$/)
   } finally {await rm(folder,{recursive:true,force:true})}
  },30000)
  test('public release verifier checks complete uploaded assets, exact commit and successful native workflow',async()=>{

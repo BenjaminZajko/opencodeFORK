@@ -6,7 +6,7 @@ async function get(route:string,host?:string) {
  const response=await fetch(base+route,{redirect:'manual',headers:host?{Host:host}:{},signal:AbortSignal.timeout(10000)})
  return {response,text:await response.text()}
 }
-for(const route of ['/','/guide','/privacy','/sponsors','/about','/terms']) {
+for(const route of ['/','/guide','/privacy','/sponsors','/about','/terms','/models','/faq','/free-ai-coding-agent','/local-ai-coding']) {
  const {response,text}=await get(route)
  assert(response.status===200,'Clean route '+route)
  assert(response.headers.get('content-type')?.includes('text/html'),'HTML type '+route)
@@ -20,7 +20,7 @@ for(const route of ['/','/guide','/privacy','/sponsors','/about','/terms']) {
   assert(response.headers.get('content-security-policy')?.includes('sha256-'+createHash('sha256').update(schema).digest('base64')),'Actual CSP schema hash')
  }
 }
-for(const route of ['guide','privacy','sponsors','about','terms']) {
+for(const route of ['guide','privacy','sponsors','about','terms','models','faq','free-ai-coding-agent','local-ai-coding']) {
  const {response}=await get('/'+route+'.html?lang=sk')
  assert(response.status===301,'Legacy redirect '+route)
  assert(new URL(response.headers.get('location')!,base).pathname==='/'+route,'Redirect target '+route)
@@ -40,4 +40,4 @@ for(const route of ['/.env','/.git/config','/.htaccess','/functions/index.js']) 
 assert((await get('/.well-known/security.txt')).text.includes('olivecode.ai@gmail.com'),'security.txt')
 assert((await get('/config.js')).response.headers.get('cache-control')?.includes('no-cache'),'Fresh release configuration')
 for(const host of ['olivecode-test.pages.dev','abc123.olivecode-test.pages.dev']) assert((await get('/',host)).response.headers.get('x-robots-tag')?.includes('noindex'),'Preview host noindex '+host)
-console.log('PASS actual Cloudflare Pages runtime: six routes, CSP, cache, five legacy redirects with queries, plain installers, real 404, private paths, security contact and preview noindex.')
+console.log('PASS actual Cloudflare Pages runtime: ten routes, CSP, cache, nine legacy redirects with queries, plain installers, real 404, private paths, security contact and preview noindex.')

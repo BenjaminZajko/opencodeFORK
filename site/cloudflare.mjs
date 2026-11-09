@@ -5,12 +5,12 @@ export function cloudflareHeaders(csp, production) {
   const common = `/*
   X-Content-Type-Options: nosniff
   X-Frame-Options: DENY
-  Referrer-Policy: no-referrer
+  Referrer-Policy: same-origin
   Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=()
   Strict-Transport-Security: max-age=31536000
   Content-Security-Policy: ${csp}
 ${production ? '' : '  X-Robots-Tag: noindex, nofollow\n'}`
-  const fresh = ['/', '/guide', '/privacy', '/sponsors', '/about', '/terms', '/*.html', '/config.js', '/build-info.json', '/site.webmanifest'].map(route => `${route}\n  Cache-Control: no-cache\n`).join('\n')
+  const fresh = ['/', '/try-instagram', '/try-youtube', '/try-community', '/try', '/guide', '/privacy', '/sponsors', '/about', '/terms', '/models', '/faq', '/free-ai-coding-agent', '/local-ai-coding', '/*.html', '/config.js', '/build-info.json', '/site.webmanifest'].map(route => `${route}\n  Cache-Control: no-cache\n`).join('\n')
   const installers = ['/install', '/install.ps1'].map(route => `${route}\n  Content-Type: text/plain; charset=utf-8\n  Cache-Control: no-store\n  X-Robots-Tag: noindex\n`).join('\n')
   const previews = ['https://:project.pages.dev/*', 'https://:version.:project.pages.dev/*'].map(route => `${route}\n  X-Robots-Tag: noindex\n`).join('\n')
   return [common, fresh, installers, previews].join('\n')
@@ -18,7 +18,7 @@ ${production ? '' : '  X-Robots-Tag: noindex, nofollow\n'}`
 
 export function cloudflareRedirects() {
   // Hostname redirects belong in zone Redirect Rules, not Pages _redirects.
-  return '# Domain redirects are configured separately in Cloudflare Redirect Rules.\n/index.html / 301\n' + ['guide', 'privacy', 'sponsors', 'about', 'terms'].flatMap(route => [`/${route}.html /${route} 301`, `/${route}/ /${route} 301`]).join('\n') + '\n'
+  return '# Domain redirects are configured separately in Cloudflare Redirect Rules.\n/index.html / 301\n' + ['try-instagram', 'try-youtube', 'try-community', 'try', 'guide', 'privacy', 'sponsors', 'about', 'terms', 'models', 'faq', 'free-ai-coding-agent', 'local-ai-coding'].flatMap(route => [`/${route}.html /${route} 301`, `/${route}/ /${route} 301`]).join('\n') + '\n'
 }
 
 export async function checkCloudflareFiles(directory, files) {

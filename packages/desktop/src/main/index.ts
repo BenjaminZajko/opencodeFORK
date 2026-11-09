@@ -47,21 +47,19 @@ import { registerWslIpcHandlers } from "./wsl/ipc"
 import { spawnWslSidecar } from "./wsl/sidecar"
 import { migrate } from "./migrate"
 import { cleanupStoreFiles } from "./store-cleanup"
-import { startBackgroundCli } from "./background-cli"
 import { setNativeTranslations } from "./native-translations"
 
 const APP_NAMES: Record<string, string> = {
-  dev: "OpenCode Dev",
-  beta: "OpenCode Beta",
-  prod: "OpenCode",
+  dev: "OliveCode Preview",
+  beta: "OliveCode Beta",
+  prod: "OliveCode",
 }
 const APP_IDS: Record<string, string> = {
-  dev: "ai.opencode.desktop.dev",
-  beta: "ai.opencode.desktop.beta",
-  prod: "ai.opencode.desktop",
+  dev: "dev.olivecode.desktop.workspace",
+  beta: "dev.olivecode.desktop.beta",
+  prod: "dev.olivecode.desktop",
 }
 const TEST_ONBOARDING = process.env.OPENCODE_TEST_ONBOARDING === "1"
-const SIDECAR_VERSION = process.env.OPENCODE_SIDECAR_V2 === "1" ? "v2" : "v1"
 const jsCallStackFeature = "DocumentPolicyIncludeJSCallStacksInCrashReports"
 
 let logger: ReturnType<typeof initLogging>
@@ -122,7 +120,7 @@ const main = Effect.gen(function* () {
 
   process.env.OPENCODE_DISABLE_EMBEDDED_WEB_UI = "true"
 
-  const appId = app.isPackaged ? APP_IDS[CHANNEL] : "ai.opencode.desktop.dev"
+  const appId = app.isPackaged ? APP_IDS[CHANNEL] : "dev.olivecode.desktop.workspace"
   const onboardingTestRoot = ((): string | undefined => {
     if (!TEST_ONBOARDING) return
 
@@ -138,7 +136,7 @@ const main = Effect.gen(function* () {
     process.env.XDG_STATE_HOME = join(root, "state")
     return root
   })()
-  app.setName(app.isPackaged ? APP_NAMES[CHANNEL] : "OpenCode Dev")
+  app.setName(app.isPackaged ? APP_NAMES[CHANNEL] : "OliveCode Preview")
   app.setAppUserModelId(appId)
   app.setPath(
     "userData",
@@ -203,7 +201,7 @@ const main = Effect.gen(function* () {
   const shellEnv = preferAppEnv(app.getPath("userData"))
 
   app.on("second-instance", (_event: Event, argv: string[]) => {
-    const urls = argv.filter((arg: string) => arg.startsWith("opencode://"))
+    const urls = argv.filter((arg: string) => arg.startsWith("olivecode://"))
     if (urls.length) {
       logger.log("deep link received via second-instance", { urls })
       emitDeepLinks(urls)
@@ -268,7 +266,7 @@ const main = Effect.gen(function* () {
       }),
     ),
   )
-  app.setAsDefaultProtocolClient("opencode")
+  app.setAsDefaultProtocolClient("olivecode")
   registerRendererProtocol()
   setDockIcon()
   const updater = setupAutoUpdater(stopSidecars)
@@ -325,27 +323,10 @@ const main = Effect.gen(function* () {
   )
 
   const loadingTask = yield* Effect.gen(function* () {
-    logger.log("sidecar connection started", { version: SIDECAR_VERSION })
+    logger.log("sidecar connection started", { engine: "olivecode-node" })
 
     ensureLoopbackNoProxy()
     useEnvProxy()
-
-    if (SIDECAR_VERSION === "v2") {
-      logger.log("spawning v2 sidecar")
-      const sidecar = yield* Effect.promise(() => startBackgroundCli(logger, shellEnv?.XDG_STATE_HOME))
-      yield* Deferred.succeed(serverReady, {
-        url: sidecar.url,
-        username: sidecar.username,
-        password: sidecar.password,
-      })
-
-      if (process.platform === "win32") {
-        void wslServers.initialize().catch((error) => logger.error("wsl server initialization failed", error))
-      }
-
-      logger.log("loading task finished")
-      return
-    }
 
     const port = yield* Effect.gen(function* () {
       const fromEnv = process.env.OPENCODE_PORT

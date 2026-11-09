@@ -1,0 +1,51 @@
+name: OliveCode download metrics
+
+on:
+  schedule:
+    - cron: '23 6 * * *'
+  workflow_dispatch:
+  push:
+    branches: [dev]
+    paths:
+      - distribution/download-metrics.mjs
+      - distribution/test/download-metrics.test.js
+      - .github/workflows/olivecode-download-metrics.yml
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: olivecode-download-metrics
+  cancel-in-progress: false
+
+jobs:
+  measure:
+    if: github.repository == 'BenjaminZajko/opencodeFORK'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GITHUB_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - name: Test counter aggregation and failure handling
+        working-directory: distribution
+        run: node --test test/download-metrics.test.js
+      - name: Restore the previous successful observation
+        run: |
+          previous_run=$(gh api "repos/$GITHUB_REPOSITORY/actions/artifacts?name=release-download-metrics&per_page=1" --jq '.artifacts[] | select(.expired == false) | .workflow_run.id')
+          if [ -n "$previous_run" ]; then
+            gh run download "$previous_run" --repo "$GITHUB_REPOSITORY" --name release-download-metrics --dir previous
+            echo "OLIVECODE_METRICS_PREVIOUS=$GITHUB_WORKSPACE/previous/snapshot.json" >> "$GITHUB_ENV"
+          fi
+      - name: Capture current public package counters
+        run: node distribution/download-metrics.mjs
+      - name: Show report in the run summary
+        run: cat download-metrics/report.md >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: release-download-metrics
+          path: download-metrics/
+          retention-days: 90
+          if-no-files-found: error

@@ -1,29 +1,17 @@
-### Issue for this PR
+### What changes for the user?
 
-Closes #
+Explain the problem and the resulting behavior. Link a related OliveCode issue if one exists.
 
-### Type of change
+### How was it checked?
 
-- [ ] Bug fix
-- [ ] New feature
-- [ ] Refactor / code improvement
-- [ ] Documentation
-
-### What does this PR do?
-
-Please provide a description of the issue, the changes you made to fix it, and why they work. It is expected that you understand why your changes work and if you do not understand why at least say as much so a maintainer knows how much to value the PR.
-
-**If you paste a large clearly AI generated description here your PR may be IGNORED or CLOSED!**
-
-### How did you verify your code works?
-
-### Screenshots / recordings
-
-_If this is a UI change, please include a screenshot or recording._
+Include relevant tests, reproduction steps, and any remaining limitations.
+For a visual change, add a screenshot or short recording with private information removed.
 
 ### Checklist
 
-- [ ] I have tested my changes locally
-- [ ] I have not included unrelated changes in this PR
+- [ ] I reviewed the changes and kept them focused.
+- [ ] I checked the affected behavior and described the result above.
+- [ ] I removed credentials, private code and personal data from attached evidence.
 
-_If you do not follow this template your PR will be automatically rejected._
+If AI assisted with the change, briefly describe what you verified yourself.
+An OliveCode maintainer will review this submission.

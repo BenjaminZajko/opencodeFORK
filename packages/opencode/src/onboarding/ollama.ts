@@ -1,5 +1,11 @@
 import os from "os"
 import path from "path"
+import { access } from "node:fs/promises"
+import { constants } from "node:fs"
+import { execFile, spawn } from "node:child_process"
+import { promisify } from "node:util"
+
+const exec = promisify(execFile)
 
 // Ollama presence, model inventory, and pull streaming. Port of the
 // OliveCode advisor/installer.py semantics that the onboarding local
@@ -22,8 +28,8 @@ export interface OllamaStatus {
 
 async function existsExecutable(file: string): Promise<boolean> {
   try {
-    const f = Bun.file(file)
-    return await f.exists()
+    await access(file, constants.X_OK)
+    return true
   } catch {
     return false
   }
@@ -45,7 +51,14 @@ export async function findOllamaBinary(
   const extra =
     extraDirs ??
     (process.platform === "win32"
-      ? [path.join(process.env.LOCALAPPDATA || path.join(os.homedir(), "AppData", "Local"), "Programs", "Ollama", "ollama.exe")]
+      ? [
+          path.join(
+            process.env.LOCALAPPDATA || path.join(os.homedir(), "AppData", "Local"),
+            "Programs",
+            "Ollama",
+            "ollama.exe",
+          ),
+        ]
       : process.platform === "darwin"
         ? ["/opt/homebrew/bin/ollama", "/usr/local/bin/ollama"]
         : ["/usr/local/bin/ollama", `${os.homedir()}/.ollama/bin/ollama`])
@@ -69,30 +82,8 @@ export function parseOllamaList(output: string): string[] {
 
 export async function listOllamaModels(binary: string, timeoutMs = 4000): Promise<string[]> {
   try {
-    const proc = Bun.spawn([binary, "list"], { stdout: "pipe", stderr: "pipe" })
-    if (!(proc.stdout instanceof ReadableStream)) return []
-    let timer: ReturnType<typeof setTimeout> | undefined
-    try {
-      return await Promise.race([
-        (async () => {
-          const out = await new Response(proc.stdout).text()
-          await proc.exited
-          return proc.exitCode === 0 ? parseOllamaList(out) : []
-        })(),
-        new Promise<string[]>((resolve) => {
-          timer = setTimeout(() => {
-            try {
-              proc.kill()
-            } catch {
-              /* already exited */
-            }
-            resolve([])
-          }, timeoutMs)
-        }),
-      ])
-    } finally {
-      clearTimeout(timer)
-    }
+    const result = await exec(binary, ["list"], { timeout: timeoutMs, windowsHide: true })
+    return parseOllamaList(result.stdout)
   } catch {
     return []
   }
@@ -227,51 +218,30 @@ export async function pullOllamaModel(
   binary: string,
   model: string,
   onLine: (line: string) => void,
+  signal?: AbortSignal,
 ): Promise<{ ok: boolean; error?: string }> {
   validateLocalModel(model)
   ollamaBaseURL()
-  // `ollama pull` streams progress on stderr; forward each line so the
-  // caller can render a live status line. Matches installer.py's
-  // streaming semantics (stderr carries the bar).
-  let proc: ReturnType<typeof Bun.spawn>
-  try {
-    proc = Bun.spawn([binary, "pull", model], { stdout: "pipe", stderr: "pipe" })
-  } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : String(e) }
-  }
-  try {
-    const stderr = proc.stderr
-    if (!(stderr instanceof ReadableStream)) return { ok: false, error: "no stderr stream" }
-    const reader = stderr.getReader()
-    const decoder = new TextDecoder()
+  // Argument arrays are deliberate: model names never pass through a shell.
+  return new Promise((resolve) => {
+    const proc = spawn(binary, ["pull", model], { stdio: ["ignore", "pipe", "pipe"], windowsHide: true, signal })
     let buffer = ""
-    for (;;) {
-      const { done, value } = await reader.read()
-      if (done) break
-      buffer += decoder.decode(value, { stream: true })
-      const lines = buffer.split("\n")
+    let output = ""
+    proc.stdout.setEncoding("utf8").on("data", (chunk: string) => {
+      output = (output + chunk).slice(-8192)
+    })
+    proc.stderr.setEncoding("utf8").on("data", (chunk: string) => {
+      buffer += chunk
+      const lines = buffer.split(/[\r\n]/)
       buffer = lines.pop() ?? ""
-      for (const line of lines) {
-        const trimmed = line.trim().replace(/\r/g, "")
-        if (trimmed) onLine(trimmed)
-      }
-    }
-    if (buffer.trim()) onLine(buffer.trim().replace(/\r/g, ""))
-  } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : String(e) }
-  }
-  const code = await proc.exited
-  if (code !== 0) {
-    let detail = ""
-    try {
-      const stdout = proc.stdout
-      if (stdout instanceof ReadableStream) detail = (await new Response(stdout).text()).trim()
-    } catch {
-      // ignore
-    }
-    return { ok: false, error: detail || `ollama pull exited with code ${code}` }
-  }
-  return { ok: true }
+      for (const line of lines) if (line.trim()) onLine(line.trim())
+    })
+    proc.once("error", (error) => resolve({ ok: false, error: error.message }))
+    proc.once("close", (code) => {
+      if (buffer.trim()) onLine(buffer.trim())
+      resolve(code === 0 ? { ok: true } : { ok: false, error: output.trim() || `ollama pull exited with code ${code}` })
+    })
+  })
 }
 
 export * as OnboardingOllama from "./ollama"

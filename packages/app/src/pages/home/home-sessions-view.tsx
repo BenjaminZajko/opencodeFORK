@@ -37,6 +37,7 @@ function isBackgroundOpen(event: MouseEvent) {
 }
 
 export type HomeSessionsViewProps = {
+  showCreateAction?: boolean
   language: ReturnType<typeof useLanguage>
   groups: Accessor<HomeSessionGroup[]>
   showProjectName: Accessor<boolean>
@@ -81,7 +82,7 @@ export function HomeSessionsView(props: HomeSessionsViewProps) {
       <div class="sticky top-0 z-30 shrink-0 bg-v2-background-bg-base pb-3 pt-6 lg:pt-12" onWheel={props.onWheel}>
         <HomeSessionSearch {...props} />
         <Suspense>
-          <Show when={props.groups().length > 0 && props.canCreateSession()}>
+          <Show when={props.showCreateAction !== false && props.groups().length > 0 && props.canCreateSession()}>
             <div class="pointer-events-none absolute right-0 top-[84px] z-20 flex lg:top-[108px]">
               <ButtonV2
                 data-action="home-new-session"

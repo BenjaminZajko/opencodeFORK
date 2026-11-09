@@ -22,10 +22,11 @@ export type Observation = {
   bounds?: { x: number; y: number; width: number; height: number }
   focusedTarget?: number
   app?: string
+  bundle?: string
   needsObservation?: boolean
   visualTargets?: { target: number; text: string }[]
   windows?: { window: number; title: string }[]
-  controls: { target: number; role: string; name?: string; enabled?: boolean }[]
+  controls: { target: number; role: string; name?: string; value?: string; enabled?: boolean; confirmable?: boolean; valueSettable?: boolean }[]
 }
 
 /** Supply only references from the observation already given to the model.
@@ -44,6 +45,8 @@ export function normalize(request: Request, observed?: Observation): ComputerDes
   if (observed.needsObservation && input.action !== "focus")
     throw new Error("The previous action sent input but could not verify its result. Focus the observed app or observe before further input; do not replay the previous action.")
   const result = { ...input, revision: input.revision ?? observed.revision }
+  if (input.action === "key" && input.target !== undefined && (input.key !== "enter" || (input.modifiers?.length ?? 0) > 0 || !observed.controls.some((control) => control.target === input.target && control.enabled !== false && control.confirmable === true)))
+    throw new Error("Targeted Enter requires an enabled confirmable control from the latest observation, with no modifiers. No key was sent.")
   const coordinateMove = input.action === "move" && (input.x !== undefined || input.y !== undefined)
   if (coordinateMove && (input.target !== undefined || !Number.isFinite(input.x) || !Number.isFinite(input.y) || input.x! < 0 || input.y! < 0))
     throw new Error("Move uses either one observed target OR finite window-relative x/y, not both. No desktop action was performed.")
@@ -53,6 +56,15 @@ export function normalize(request: Request, observed?: Observation): ComputerDes
     // Never infer a search, password or other single-line field from missing arguments.
     const focused = observed.controls.find((control) => control.target === observed.focusedTarget && control.role === "AXTextArea" && control.enabled !== false)
     if (focused) result.target = focused.target
+  }
+  if (["type", "fill"].includes(input.action) && observed.bundle === "com.microsoft.Excel") {
+    const editor = observed.controls.find((control) => control.target === result.target)
+    const address = /^Formula Bar\. ([A-Z]+),(\d+)(?:\s|$)/.exec(editor?.name ?? "")
+    if (address) {
+      const selected = observed.controls.find((control) => control.role === "AXComboBox" && control.name === "name box")?.value?.trim().toUpperCase().replaceAll("$", "")
+      if (selected !== `${address[1]}${address[2]}`)
+        throw new Error("Excel’s Name Box and formula bar disagree about the selected cell. No text was sent. Use Control+G, fill the observed Reference field, click OK and verify both controls before editing.")
+    }
   }
   if (["click", "move", "drag", "type", "fill"].includes(input.action) && !coordinateMove && (result.target === undefined || !Number.isInteger(result.target) || result.target < 1))
     throw new Error("Choose a target from the latest observation. Typing without a target works only in an observed, focused document text area. No desktop action was performed.")

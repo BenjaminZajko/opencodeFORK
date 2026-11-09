@@ -39,6 +39,7 @@ import type { PromptSession } from "@/context/prompt"
 import "./titlebar.css"
 import { newTabTooltipKeybind } from "./command-tooltip-keybind"
 import { normalizeSessionInfo } from "@/utils/session"
+import { Mark } from "@opencode-ai/ui/logo"
 
 const legacyTitlebarHeight = 40
 const v2TitlebarHeight = 36
@@ -61,7 +62,11 @@ export function useTitlebarRightMount() {
   return mount
 }
 
-export function Titlebar(props: { update?: TitlebarUpdate; debugTools?: { visible: boolean; toggle: () => void } }) {
+export function Titlebar(props: {
+  update?: TitlebarUpdate
+  debugTools?: { visible: boolean; toggle: () => void }
+  navigation?: { opened: () => boolean; toggle: () => void }
+}) {
   const layout = useLayout()
   const platform = usePlatform()
   const command = useCommand()
@@ -318,7 +323,7 @@ export function Titlebar(props: { update?: TitlebarUpdate; debugTools?: { visibl
                 id: "home.toggle",
                 title: language.t("home.title"),
                 category: language.t("command.category.view"),
-                keybind: "mod+b",
+                keybind: props.navigation ? "mod+shift+h" : "mod+b",
                 hidden: true,
                 onSelect: toggleHome,
               },
@@ -368,33 +373,46 @@ export function Titlebar(props: { update?: TitlebarUpdate; debugTools?: { visibl
                   "md:pl-4": !macTrafficLights(),
                 }}
               >
-                <ChannelIndicator debugTools={props.debugTools} />
+                <Show when={props.navigation} fallback={<ChannelIndicator debugTools={props.debugTools} />}>
+                  {(navigation) => (
+                    <IconButton
+                      data-action="workspace-sidebar-toggle"
+                      aria-controls="olivecode-project-sidebar"
+                      icon="layout-left"
+                      variant="ghost"
+                      onClick={navigation().toggle}
+                      aria-label={language.t("command.sidebar.toggle")}
+                      aria-expanded={navigation().opened()}
+                    />
+                  )}
+                </Show>
                 <Show when={windows() || linux()}>
                   <WindowsAppMenu command={command} platform={platform} variant="v2" />
                 </Show>
-                <TooltipV2
-                  placement="bottom"
-                  value={
-                    <>
-                      {language.t("home.title")}
-                      <KeybindV2 keys={command.keybindParts("home.toggle")} variant="neutral" />
-                    </>
-                  }
-                  class="shrink-0"
-                >
-                  <IconButtonV2
-                    type="button"
-                    variant="ghost-muted"
-                    size="large"
-                    class="!w-9 shrink-0"
-                    icon={<IconV2 name="grid-plus" />}
-                    state={layout.route().type === "home" ? "pressed" : undefined}
-                    onClick={toggleHome}
-                    aria-label={language.t("home.title")}
-                    aria-pressed={layout.route().type === "home"}
-                  />
-                </TooltipV2>
-
+                <Show when={!props.navigation?.opened()}>
+                  <TooltipV2
+                    placement="bottom"
+                    value={
+                      <>
+                        {language.t("home.title")}
+                        <KeybindV2 keys={command.keybindParts("home.toggle")} variant="neutral" />
+                      </>
+                    }
+                    class="shrink-0"
+                  >
+                    <IconButtonV2
+                      type="button"
+                      variant="ghost-muted"
+                      size="large"
+                      class="!w-9 shrink-0"
+                      icon={<IconV2 name="grid-plus" />}
+                      state={layout.route().type === "home" ? "pressed" : undefined}
+                      onClick={toggleHome}
+                      aria-label={language.t("home.title")}
+                      aria-pressed={layout.route().type === "home"}
+                    />
+                  </TooltipV2>
+                </Show>
                 <TitlebarTabStrip
                   tabs={tabsStore}
                   currentTab={currentTab}
@@ -646,28 +664,25 @@ function TitlebarUpdateIconButton(props: { state: TitlebarUpdatePillState }) {
 }
 
 function ChannelIndicator(props: { debugTools?: { visible: boolean; toggle: () => void } }) {
+  const language = useLanguage()
   const channel = import.meta.env.VITE_OPENCODE_CHANNEL
   if (channel === "dev" && props.debugTools) {
     return (
       <button
         type="button"
-        class="bg-icon-interactive-base text-[#FFF] font-medium px-2 rounded-sm uppercase font-mono cursor-pointer"
+        class="flex size-7 shrink-0 items-center justify-center rounded-md cursor-pointer"
         onClick={props.debugTools.toggle}
-        aria-label="Toggle debug tools"
+        aria-label={language.t("olivecode.debug")}
         aria-pressed={props.debugTools.visible}
       >
-        DEV
+        <Mark class="size-5" />
       </button>
     )
   }
 
   return (
-    <>
-      {["beta", "dev"].includes(channel) && (
-        <div class="bg-icon-interactive-base text-[#FFF] font-medium px-2 rounded-sm uppercase font-mono">
-          {channel.toUpperCase()}
-        </div>
-      )}
-    </>
+    <span class="flex size-7 shrink-0 items-center justify-center" aria-label={language.t("olivecode.name")}>
+      <Mark class="size-5" />
+    </span>
   )
 }

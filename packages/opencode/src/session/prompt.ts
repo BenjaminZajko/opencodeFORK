@@ -1101,6 +1101,7 @@ const layer = Layer.effect(
         let previousGaps: string[] = []
         let emptyResponses = 0
         let responseRecovery = ""
+        let overflows = 0
 
         while (true) {
           yield* status.set(sessionID, { type: "busy" })
@@ -1433,8 +1434,19 @@ const layer = Layer.effect(
               }
             }
 
+            if (result !== "compact") overflows = 0
             if (result === "stop") return "break" as const
             if (result === "compact") {
+              if (!handle.message.finish && ++overflows > 2) {
+                handle.message.error = new SessionV1.ContextOverflowError({
+                  message: "The provider still rejects this request after two automatic compactions. The task remains incomplete. Choose a model/provider with a larger request allowance or reduce the task; automatic recovery has stopped to avoid a retry loop.",
+                }).toObject()
+                handle.message.finish = "error"
+                yield* sessions.updateMessage(handle.message)
+                yield* events.publish(Session.Event.Error, { sessionID, error: handle.message.error })
+                return "break" as const
+              }
+              if (handle.message.finish) overflows = 0
               yield* compaction.create({
                 sessionID,
                 agent: lastUser.agent,

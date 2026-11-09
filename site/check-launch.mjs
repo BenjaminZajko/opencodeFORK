@@ -19,7 +19,7 @@ export async function checkLaunch(directory) {
   await walk(directory)
   const platformFiles=info.host==='Cloudflare Pages' ? ['_headers','_redirects'] : info.host==='Websupport' ? ['.htaccess'] : []
   if(!platformFiles.length) throw Error('Unsupported host in build artifact.')
-  const allowed=new Set([...Object.keys(pages),'style.css','site.js','grove.js','languages.js','guide-copy.js','remote-guide-copy.js','install.mjs','config.js','favicon.svg','robots.txt','sitemap.xml','site.webmanifest','build-info.json','install','install.ps1',...platformFiles,'.well-known/security.txt'])
+  const allowed=new Set([...Object.keys(pages),'style.css','site.js','grove.js','languages.js','guide-copy.js','remote-guide-copy.js','install.mjs','config.js','favicon.svg','robots.txt','indexnow-key.txt','sitemap.xml','site.webmanifest','build-info.json','install','install.ps1',...platformFiles,'.well-known/security.txt','assets/first-task-evidence.json'])
   for(const file of files) {
     if(!allowed.has(file)&&!/^assets\/[a-z0-9-]+\.(svg|webp|png)$/.test(file)) throw Error('Unexpected public file: '+file)
     if(/\.(html|js|mjs|json|txt|xml)$/.test(file)) {
@@ -31,7 +31,7 @@ export async function checkLaunch(directory) {
   for(const [name,page] of Object.entries(pages)) {
     const html=await readFile(path.join(directory,name),'utf8')
     if(!html.includes('<title>'+escape(page.title)+'</title>')||!html.includes('property="og:image"')||!html.includes('name="description" content="'+escape(page.description)+'"')) throw Error('Incomplete metadata: '+name)
-    if(name!=='404.html'&&!html.includes(`rel="canonical" href="${info.origin}${page.route}"`)) throw Error('Wrong canonical: '+name)
+    if(name!=='404.html'&&!html.includes(`rel="canonical" href="${info.origin}${page.canonical ?? page.route}"`)) throw Error('Wrong canonical: '+name)
     if(info.environment!=='production'&&!html.includes('noindex,nofollow')) throw Error('Preview indexing must be disabled.')
     for(const match of html.matchAll(/(?:src|href)="([^"#]+)"/g)) {
       const value=match[1]

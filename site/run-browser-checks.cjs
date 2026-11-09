@@ -25,7 +25,7 @@ const base = process.env.OLIVECODE_TEST_ORIGIN || 'http://127.0.0.1:8765';
     const failures=[];
     page.on('pageerror', e=>failures.push(String(e)));
     page.on('response', r=>{if(r.status()>=400) failures.push(r.status()+' '+r.url())});
-    for(const route of ['/','/guide','/privacy','/sponsors','/about','/terms']) {
+    for(const route of ['/','/guide','/privacy','/sponsors','/about','/terms','/models','/faq','/free-ai-coding-agent','/local-ai-coding']) {
       await page.goto(base+route);
       if(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth)) throw Error('Mobile overflow '+route);
       if(await page.locator('link[rel=canonical]').getAttribute('href')!=='https://olivecode.dev'+route) throw Error('Canonical '+route);
@@ -33,7 +33,7 @@ const base = process.env.OLIVECODE_TEST_ORIGIN || 'http://127.0.0.1:8765';
       if(await page.locator('footer a[href="/about"]').count()!==1) throw Error('Wrong contact destination '+route);
     }
     if(failures.length) throw Error(failures.join('\n'));
-    console.log(JSON.stringify({test:'launch browser checks',passed:true,checks:['six clean URLs','all page assets load','320px layouts','canonical metadata','public contact on every page']}));
+    console.log(JSON.stringify({test:'launch browser checks',passed:true,checks:['ten clean URLs','all page assets load','320px layouts','canonical metadata','public contact on every page']}));
     await context.close();
   } finally { await browser.close(); }
 })().catch(error=>{console.error(error);process.exitCode=1});

@@ -1,26 +1,26 @@
 {
   "name": "@opencode-ai/desktop",
   "private": true,
-  "version": "1.18.29",
+  "version": "0.3.1",
   "type": "module",
   "license": "MIT",
-  "homepage": "https://opencode.ai",
+  "homepage": "https://olivecode.dev",
   "author": {
-    "name": "OpenCode",
-    "email": "hello@opencode.ai"
+    "name": "OliveCode"
   },
   "scripts": {
     "typecheck": "tsgo -b",
-    "predev": "bun ./scripts/predev.ts",
+    "predev": "bun ./scripts/prepare-olivecode.ts",
     "dev": "electron-vite dev",
-    "prebuild": "bun ./scripts/prebuild.ts",
+    "prebuild": "bun ./scripts/prepare-olivecode.ts",
     "build": "electron-vite build",
     "preview": "electron-vite preview",
     "package": "electron-builder --config electron-builder.config.ts",
     "package:mac": "electron-builder --mac --config electron-builder.config.ts",
     "package:win": "electron-builder --win --config electron-builder.config.ts",
     "package:linux": "electron-builder --linux --config electron-builder.config.ts",
-    "native:build": "bun install --cwd native"
+    "native:build": "bun install --cwd native",
+    "package:preview": "electron-builder --mac --dir --config electron-builder.config.ts"
   },
   "main": "./out/main/index.js",
   "dependencies": {

@@ -1,4 +1,28 @@
-# Contributing to OpenCode
+# Contributing to OliveCode
+
+OliveCode is a separate project derived from OpenCode. For OliveCode bugs, ideas and
+contributions, use [this repository's issue tracker](https://github.com/BenjaminZajko/opencodeFORK/issues).
+New users can use the [first-run feedback form](https://github.com/BenjaminZajko/opencodeFORK/issues/new?template=olivecode-first-run.yml).
+Please remove tokens, private code and personal information from public reports.
+
+Small, focused fixes and clear reproduction steps are welcome. Discuss larger changes
+in an OliveCode issue first so we can agree on scope. A linked issue is helpful when
+one exists; you do not need to create a duplicate issue for a small documented fix.
+Describe what changed and how you checked it. If AI helped, review its output and
+disclose relevant limitations. Maintainers review submissions; OliveCode does not use
+the inherited upstream paid-model triage or two-hour automatic rejection policy.
+
+## Upstream development reference
+
+The development notes below are retained from OpenCode. Upstream team assignments,
+labels, feature-approval rules and contribution policies refer to **OpenCode**, not
+OliveCode. Internal package names and some development commands retain upstream names.
+For OliveCode's public release and download checks, see
+[launch operations](docs/olivecode-launch-operations.md).
+
+---
+
+## Contributing to upstream OpenCode
 
 We want to make it easy for you to contribute to OpenCode. Here are the most common type of changes that get merged:
 

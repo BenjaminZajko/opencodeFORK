@@ -1,3 +1,5 @@
+import { launchHelper } from "./desktop-launch"
+import { platformCommand } from "./desktop-platform"
 import { assertIsolated, sshArguments } from "./background-mac"
 import { promisify } from "node:util"
 import { execFile, spawn, type ChildProcessWithoutNullStreams } from "node:child_process"
@@ -26,13 +28,30 @@ async function executable() {
   const data = encoded ? Buffer.from(encoded, "base64") : await readFile(new URL("./native/desktop-helper", import.meta.url)).catch(() => {
     throw new Error("The desktop helper is missing. Use the packaged OliveCode build.")
   })
-  const app = path.join(Global.Path.data, "computer", "OliveCode Computer.app", "Contents")
-  const bin = path.join(app, "MacOS", "OliveCode Computer")
-  await mkdir(path.dirname(bin), { recursive: true })
+  return installBundle(path.join(Global.Path.data, "computer", "OliveCode Computer.app"), data)
+}
+
+/** Seal the complete bundle, not just the embedded Mach-O. Signing changes the
+ * executable's bytes, so remember both source and installed digests to avoid
+ * rewriting an unchanged helper (and disturbing its macOS permission identity).
+ */
+export async function installBundle(app: string, data: Uint8Array) {
+  const contents = path.join(app, "Contents")
+  const bin = path.join(contents, "MacOS", "OliveCode Computer")
+  const receipt = path.join(path.dirname(app), "desktop-bundle.json")
   const hash = (value: Uint8Array) => createHash("sha256").update(value).digest("hex")
+  const source = hash(data)
   const existing = await readFile(bin).catch(() => undefined)
-  if (!existing || hash(existing) !== hash(data)) { await writeFile(bin, data, { mode: 0o755 }); await chmod(bin, 0o755) }
-  await writeFile(path.join(app, "Info.plist"), `<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd"><plist version="1.0"><dict><key>CFBundleIdentifier</key><string>com.olivecode.computer</string><key>CFBundleName</key><string>OliveCode Computer</string><key>CFBundleExecutable</key><string>OliveCode Computer</string><key>CFBundleVersion</key><string>1</string><key>LSMinimumSystemVersion</key><string>14.0</string><key>LSUIElement</key><true/></dict></plist>`)
+  const installed = await Bun.file(receipt).json().catch(() => undefined) as { source: string; binary: string } | undefined
+  const valid = await promisify(execFile)("/usr/bin/codesign", ["--verify", "--strict", app]).then(() => true, () => false)
+  if (valid && installed?.source === source && existing && installed.binary === hash(existing)) return bin
+  await mkdir(path.dirname(bin), { recursive: true })
+  await writeFile(bin, data, { mode: 0o755 })
+  await chmod(bin, 0o755)
+  await writeFile(path.join(contents, "Info.plist"), `<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd"><plist version="1.0"><dict><key>CFBundleIdentifier</key><string>com.olivecode.computer</string><key>CFBundleName</key><string>OliveCode Computer</string><key>CFBundleExecutable</key><string>OliveCode Computer</string><key>CFBundleVersion</key><string>1</string><key>LSMinimumSystemVersion</key><string>14.0</string><key>LSUIElement</key><true/></dict></plist>`)
+  await promisify(execFile)("/usr/bin/codesign", ["--force", "--sign", "-", "--identifier", "com.olivecode.computer", app])
+  await promisify(execFile)("/usr/bin/codesign", ["--verify", "--strict", app])
+  await writeFile(receipt, JSON.stringify({ source, binary: hash(await readFile(bin)) }))
   return bin
 }
 
@@ -90,10 +109,12 @@ export class Desktop {
     signal.addEventListener("abort", abort, { once: true })
     try {
       if (!this.child) {
-        const bin = this.binary ?? await (installation ??= executable().catch((error) => { installation = undefined; throw error }))
+        const local = !this.binary && !this.remote && process.platform !== "darwin" ? await platformCommand() : undefined
+        const bin = local?.binary ?? this.binary ?? await (installation ??= executable().catch((error) => { installation = undefined; throw error }))
         if (signal.aborted || this.stopped) throw new Error("Desktop control stopped.")
-        const child = spawn(this.remote?.sshBinary ?? (this.remote ? "/usr/bin/ssh" : bin), this.remote ? sshArguments(this.remote.host) : [], { stdio: ["pipe", "pipe", "pipe"] })
+        const child = !this.binary && !this.remote && !local ? await launchHelper(bin) : spawn(this.remote?.sshBinary ?? (this.remote ? "/usr/bin/ssh" : bin), this.remote ? sshArguments(this.remote.host) : local?.args ?? [], { stdio: ["pipe", "pipe", "pipe"], windowsHide: true })
         this.child = child
+        if (signal.aborted || this.stopped) { this.close(); throw new Error("Desktop control stopped.") }
         child.stdin.on("error", () => this.close())
         child.stdout.on("error", () => this.close())
         child.stderr.on("error", () => this.close())

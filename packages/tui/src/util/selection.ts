@@ -34,12 +34,11 @@ export function copy(renderer: Renderer, toast: Toast, clipboard: ClipboardServi
   const clipboardText =
     focus?.getClipboardText && selection.selectedRenderables.includes(focus) ? focus.getClipboardText(text) : text
 
-  clipboard
-    ?.write?.(clipboardText)
-    .then(() => toast.show({ message: "Copied to clipboard", variant: "info" }))
-    .catch(toast.error)
-
-  renderer.clearSelection()
+  if (!clipboard.write) { toast.show({ message: "Clipboard unavailable. Selected text was kept.", variant: "error" }); return true }
+  clipboard.write(clipboardText).then(() => {
+    toast.show({ message: "Copied to clipboard", variant: "info" })
+    if (renderer.getSelection() === selection) renderer.clearSelection()
+  }).catch(toast.error)
   return true
 }
 

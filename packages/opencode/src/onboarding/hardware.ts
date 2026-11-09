@@ -1,5 +1,10 @@
 import os from "os"
 import { statfsSync } from "node:fs"
+import { readFile } from "node:fs/promises"
+import { execFile } from "node:child_process"
+import { promisify } from "node:util"
+
+const exec = promisify(execFile)
 
 // Robust hardware detection. Port of OliveCode advisor/hardware.py.
 //
@@ -47,9 +52,7 @@ export function hasNvidiaGpu(profile: HardwareProfile): boolean {
 
 export function bestDedicatedVramGb(profile: HardwareProfile): number {
   // Apple Silicon and integrated GPUs share system RAM: 0.0 here.
-  const dedicated = profile.gpus.filter(
-    (g) => (g.vendor === "nvidia" || g.vendor === "amd") && g.vramGb,
-  )
+  const dedicated = profile.gpus.filter((g) => (g.vendor === "nvidia" || g.vendor === "amd") && g.vramGb)
   if (dedicated.length === 0) return 0.0
   return Math.max(...dedicated.map((g) => g.vramGb as number))
 }
@@ -75,24 +78,8 @@ export type RunFn = (cmd: string[]) => Promise<RunResult>
 
 export async function runCommand(cmd: string[], timeoutMs = 4000): Promise<RunResult> {
   try {
-    const proc = Bun.spawn(cmd, { stdout: "pipe", stderr: "pipe" })
-    const timer = setTimeout(() => {
-      try {
-        proc.kill()
-      } catch {
-        // already exited
-      }
-    }, timeoutMs)
-    try {
-      const [stdout, stderr] = await Promise.all([
-        new Response(proc.stdout).text(),
-        new Response(proc.stderr).text(),
-      ])
-      const code = await proc.exited
-      return { code, stdout, stderr }
-    } finally {
-      clearTimeout(timer)
-    }
+    const result = await exec(cmd[0], cmd.slice(1), { timeout: timeoutMs, windowsHide: true })
+    return { code: 0, stdout: result.stdout, stderr: result.stderr }
   } catch {
     return { code: -1, stdout: "", stderr: "" }
   }
@@ -101,7 +88,7 @@ export async function runCommand(cmd: string[], timeoutMs = 4000): Promise<RunRe
 export type ReadFileFn = (path: string) => Promise<string>
 
 async function defaultReadFile(path: string): Promise<string> {
-  return Bun.file(path).text()
+  return readFile(path, "utf8")
 }
 
 export interface DetectDeps {
@@ -139,11 +126,7 @@ export function parseLscpu(output: string): LscpuResult | undefined {
   for (const line of output.split("\n")) {
     if (line.startsWith("Model name:")) {
       model = line.split(":", 2)[1].trim()
-    } else if (
-      line.startsWith("CPU(s):") &&
-      !line.includes("Logical") &&
-      !line.toLowerCase().includes("socket")
-    ) {
+    } else if (line.startsWith("CPU(s):") && !line.includes("Logical") && !line.toLowerCase().includes("socket")) {
       // The plain "CPU(s):" line is the logical count on lscpu.
       const n = parseInt(line.split(":", 2)[1].trim(), 10)
       if (Number.isFinite(n)) coresLog = n
@@ -362,7 +345,10 @@ async function detectCpuWindows(profile: HardwareProfile, run: RunFn): Promise<v
   }
   if (code !== 0 || !stdout.trim()) {
     const fallback = await run([
-      "powershell.exe", "-NoProfile", "-NonInteractive", "-Command",
+      "powershell.exe",
+      "-NoProfile",
+      "-NonInteractive",
+      "-Command",
       "Get-CimInstance Win32_Processor | Select-Object Name,NumberOfCores,NumberOfLogicalProcessors | ConvertTo-Json -Compress",
     ])
     if (fallback.code === 0 && fallback.stdout.trim()) {
@@ -542,15 +528,18 @@ export async function detectWindowsGpusWmi(run: RunFn = runCommand): Promise<Gpu
   ])
   if (code === 0 && stdout.trim()) return parseWmiVideoControllers(stdout)
   const fallback = await run([
-    "powershell.exe", "-NoProfile", "-NonInteractive", "-Command",
+    "powershell.exe",
+    "-NoProfile",
+    "-NonInteractive",
+    "-Command",
     "Get-CimInstance Win32_VideoController | Select-Object Name,AdapterRAM,DriverVersion | ConvertTo-Json -Compress",
   ])
   if (fallback.code !== 0 || !fallback.stdout.trim()) return []
   try {
     const data = JSON.parse(fallback.stdout) as Record<string, unknown> | Record<string, unknown>[]
     const controllers = Array.isArray(data) ? data : [data]
-    const records = controllers.map((gpu) =>
-      `AdapterRAM=${gpu.AdapterRAM ?? ""}\nDriverVersion=${gpu.DriverVersion ?? ""}\nName=${gpu.Name ?? ""}`,
+    const records = controllers.map(
+      (gpu) => `AdapterRAM=${gpu.AdapterRAM ?? ""}\nDriverVersion=${gpu.DriverVersion ?? ""}\nName=${gpu.Name ?? ""}`,
     )
     return parseWmiVideoControllers(records.join("\n\n"))
   } catch {

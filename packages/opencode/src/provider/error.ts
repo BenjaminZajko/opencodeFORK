@@ -172,6 +172,17 @@ export type ParsedAPICallError =
 export function parseAPICallError(input: { providerID: ProviderV2.ID; error: APICallError }): ParsedAPICallError {
   const m = message(input.providerID, input.error)
   const body = json(input.error.responseBody)
+  if (input.providerID === "groq" && input.error.statusCode === 413 && /tokens per minute|\bTPM\b/i.test(m)) {
+    const limit = m.match(/\bLimit\s+(\d+)/i)?.[1]
+    const requested = m.match(/\bRequested\s+(\d+)/i)?.[1]
+    return {
+      type: "api_error",
+      message: `This request exceeds this Groq account's token allowance${limit && requested ? ` (${requested} requested; ${limit} allowed)` : ""}. Choose a model/provider with a larger request allowance or shorten the task. Repeated automatic retries will not make this oversized request fit.`,
+      statusCode: input.error.statusCode,
+      isRetryable: false,
+      responseBody: input.error.responseBody,
+    }
+  }
   if (isContextOverflow(m) || input.error.statusCode === 413 || body?.error?.code === "context_length_exceeded") {
     return {
       type: "context_overflow",

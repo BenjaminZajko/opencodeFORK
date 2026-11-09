@@ -17,10 +17,12 @@ for (const [system,arch,libc,target,profile] of [
     const tools=path.join(root,"tools");await mkdir(tools)
     const unpacked=path.join(root,"payload");await mkdir(unpacked)
     await Bun.write(path.join(tools,"uname"),`#!/bin/sh\ncase "$1" in -s) echo ${system};; -m) echo ${arch};; esac\n`)
+    await Bun.write(path.join(tools,"sw_vers"),'#!/bin/sh\necho 13.0\n')
+    await Bun.write(path.join(tools,"sysctl"),'#!/bin/sh\nexit 1\n')
     await Bun.write(path.join(tools,"ldd"),`#!/bin/sh\necho ${libc}\n`)
     const binary=path.join(unpacked,"olivecode")
     await Bun.write(binary,'#!/bin/sh\nif [ "$1" = --version ]; then echo 0.1.0-test; else pwd; fi\n')
-    for(const file of [binary,path.join(tools,"uname"),path.join(tools,"ldd")]) await chmod(file,0o755)
+    for(const file of [binary,path.join(tools,"uname"),path.join(tools,"ldd"),path.join(tools,"sw_vers"),path.join(tools,"sysctl")]) await chmod(file,0o755)
     const archive=path.join(root,`OliveCode-${target}.zip`)
     const zip=Bun.spawn(["zip","-q",archive,"olivecode"],{cwd:unpacked});expect(await zip.exited).toBe(0)
     const checksum=archive+".sha256"

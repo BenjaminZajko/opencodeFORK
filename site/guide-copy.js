@@ -1,4 +1,21 @@
 // Public guide copy only. Commands and product names are never translated.
+// The verified build supplies the same release status to raw HTML and translations.
+export const releaseNotices = {
+  en: 'Public preview for macOS, Windows and Linux. Packages have passed native build and installer checks; AI results still need review. Binaries are not yet code-signed or notarized.',
+  sk: 'Verejná ukážka pre macOS, Windows a Linux. Balíky prešli natívnymi kontrolami zostavenia a inštalácie; výsledky AI treba overiť. Binárne súbory zatiaľ nie sú podpísané ani notarizované.',
+  cs: 'Veřejná ukázka pro macOS, Windows a Linux. Balíčky prošly nativními kontrolami sestavení a instalace; výsledky AI je nutné ověřit. Binární soubory zatím nejsou podepsané ani notarizované.',
+  de: 'Öffentliche Vorschau für macOS, Windows und Linux. Native Build- und Installationsprüfungen wurden bestanden; KI-Ergebnisse müssen geprüft werden. Die Programme sind noch nicht codesigniert oder notarisiert.',
+  es: 'Vista previa pública para macOS, Windows y Linux. Los paquetes superaron las comprobaciones nativas de compilación e instalación; revisa los resultados de la IA. Los binarios aún no están firmados ni notarizados.',
+  fr: 'Version publique préliminaire pour macOS, Windows et Linux. Les paquets ont passé les vérifications natives de compilation et d’installation ; vérifiez les résultats de l’IA. Les exécutables ne sont pas encore signés ni notariés.',
+  it: 'Anteprima pubblica per macOS, Windows e Linux. I pacchetti hanno superato i controlli nativi di compilazione e installazione; verifica i risultati dell’IA. I binari non sono ancora firmati né autenticati tramite notarizzazione.',
+  pt: 'Prévia pública para macOS, Windows e Linux. Os pacotes passaram nas verificações nativas de compilação e instalação; revise os resultados da IA. Os binários ainda não têm assinatura de código nem notarização.',
+  pl: 'Publiczna wersja wstępna dla macOS, Windows i Linux. Pakiety przeszły natywne testy kompilacji i instalacji; wyniki AI wymagają sprawdzenia. Pliki binarne nie są jeszcze podpisane ani notaryzowane.',
+  uk: 'Публічна попередня версія для macOS, Windows і Linux. Пакети пройшли перевірки збирання та встановлення на відповідних платформах; результати ШІ слід перевіряти. Бінарні файли ще не мають підпису коду чи нотаризації.',
+  ar: 'معاينة عامة لنظام macOS وWindows وLinux. اجتازت الحزم اختبارات البناء والتثبيت الأصلية؛ يجب مراجعة نتائج الذكاء الاصطناعي. الملفات التنفيذية غير موقعة أو موثقة بعد.',
+  zh: '适用于 macOS、Windows 和 Linux 的公开预览版。软件包已通过各平台原生构建和安装检查；AI 结果仍需审核。二进制文件尚未进行代码签名或公证。',
+  ja: 'macOS、Windows、Linux 向けの公開プレビューです。各プラットフォームでのビルドとインストールの確認に合格していますが、AI の結果は確認してください。バイナリはまだコード署名・公証されていません。',
+  ko: 'macOS, Windows, Linux용 공개 미리보기입니다. 패키지는 각 플랫폼의 기본 빌드 및 설치 검사를 통과했지만 AI 결과는 검토해야 합니다. 바이너리는 아직 코드 서명 및 공증되지 않았습니다.',
+}
 export const languages = {
   en: ['English', [
     'Start in your project.', 'Free cloud models or local models. Choose what works for you.',
