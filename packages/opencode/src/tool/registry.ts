@@ -28,6 +28,7 @@ import z from "zod"
 import { Plugin } from "../plugin"
 import { Provider } from "@/provider/provider"
 
+import { freeProvider } from "@opencode-ai/core/olivecode/models"
 import { WebSearchTool } from "./websearch"
 import { LspTool } from "./lsp"
 import * as Truncate from "./truncate"
@@ -60,6 +61,9 @@ import { McpCatalog } from "@/mcp/catalog"
 
 export function webSearchEnabled(providerID: ProviderV2.ID, flags = { exa: false, parallel: false }) {
   return (
+    // OliveCode: keyless hosted search for free cloud providers. Local (Ollama)
+    // users keep everything on-device unless they opt in with a flag.
+    freeProvider(providerID) ||
     providerID === ProviderV2.ID.opencode ||
     providerID === ProviderV2.ID.make("opencode-go") ||
     flags.exa ||

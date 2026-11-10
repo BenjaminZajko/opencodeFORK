@@ -13,6 +13,7 @@ import PROMPT_META from "./prompt/meta.txt"
 
 import PROMPT_CODEX from "./prompt/codex.txt"
 import PROMPT_TRINITY from "./prompt/trinity.txt"
+import PROMPT_COMPACT from "./prompt/compact.txt"
 import type { Provider } from "@/provider/provider"
 import type { Agent } from "@/agent/agent"
 import { Permission } from "@/permission"
@@ -24,7 +25,25 @@ import { Reference } from "@opencode-ai/core/reference"
 import { MCP } from "@/mcp"
 import { PermissionV1 } from "@opencode-ai/core/v1/permission"
 
+/** Providers whose free requests are small: Groq's tokens-per-minute cap and Ollama's default 4K context. */
+export function compact(model: Pick<Provider.Model, "providerID">) {
+  return model.providerID === "groq" || model.providerID === "ollama"
+}
+
 export function provider(model: Provider.Model) {
+  if (compact(model)) return [PROMPT_COMPACT]
+  return upstream(model).map(brand)
+}
+
+// Upstream prompts introduce the agent as OpenCode and link its issue tracker.
+function brand(prompt: string) {
+  return prompt
+    .replaceAll(/https:\/\/github\.com\/anomalyco\/opencode(?:\/issues)?/g, "https://github.com/BenjaminZajko/opencodeFORK/issues")
+    .replaceAll(/https:\/\/opencode\.ai(?:\/docs)?\/?/g, "https://olivecode.dev/guide")
+    .replaceAll(/(?<![\w./-])(?:OpenCode|opencode)(?![\w./-])/g, "OliveCode")
+}
+
+function upstream(model: Provider.Model) {
   if (model.api.id.includes("muse")) {
     const name = model.api.id.includes("muse-glimmer") ? "Muse Glimmer" : "Muse Spark"
     return [PROMPT_META.replaceAll("{{MODEL_NAME}}", name)]

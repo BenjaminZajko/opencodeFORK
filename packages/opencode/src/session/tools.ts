@@ -23,6 +23,8 @@ import { ProviderV2 } from "@opencode-ai/core/provider"
 import { ModelV2 } from "@opencode-ai/core/model"
 import { isRecord } from "@/util/record"
 import { RuntimeFlags } from "@/effect/runtime-flags"
+import { SystemPrompt } from "./system"
+import { compactDescription } from "@/tool/compact"
 
 const MCP_RESOURCE_TOOLS = {
   list: "list_mcp_resources",
@@ -104,7 +106,7 @@ export const resolve = Effect.fn("SessionTools.resolve")(function* (input: {
   })) {
     const schema = ProviderTransform.schema(input.model, ToolJsonSchema.fromTool(item))
     tools[item.id] = tool({
-      description: item.description,
+      description: SystemPrompt.compact(input.model) ? compactDescription(item.id, item.description) : item.description,
       inputSchema: jsonSchema(schema),
       execute(args, options) {
         return run.promise(
