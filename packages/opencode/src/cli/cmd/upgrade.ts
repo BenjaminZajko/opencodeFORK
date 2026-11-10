@@ -3,6 +3,8 @@ import { UI } from "../ui"
 import * as prompts from "@clack/prompts"
 import { Installation } from "../../installation"
 import { InstallationChannel, InstallationVersion } from "@opencode-ai/core/installation/version"
+import { availableUpdate } from "@opencode-ai/core/olivecode/update"
+import { OliveCodeUpdate } from "../../installation/olivecode-update"
 
 export const UpgradeCommand = {
   command: "upgrade [target]",
@@ -22,7 +24,19 @@ export const UpgradeCommand = {
   },
   handler: async (args: { target?: string; method?: string }) => {
     if (InstallationChannel.startsWith("olivecode")) {
-      UI.println("To update OliveCode, run its install command again from the OliveCode website or release page.")
+      const target = args.target?.replace(/^v/, "") ?? (await availableUpdate(InstallationVersion).catch(() => undefined))
+      if (!target) {
+        UI.println(`OliveCode ${InstallationVersion} is up to date.`)
+        return
+      }
+      UI.println(`Updating OliveCode ${InstallationVersion} → ${target}…`)
+      await OliveCodeUpdate.installUpdate(target).then(
+        () => UI.println(`Installed OliveCode ${target}. Close OliveCode and run olivecode again to use it.`),
+        (error) => {
+          UI.error(error instanceof Error ? error.message : String(error))
+          process.exitCode = 1
+        },
+      )
       return
     }
     UI.empty()

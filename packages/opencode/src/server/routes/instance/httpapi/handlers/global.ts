@@ -4,7 +4,8 @@ import { EffectBridge } from "@/effect/bridge"
 import { EventV2 } from "@opencode-ai/core/event"
 import { Installation } from "@/installation"
 import { disposeAllInstancesAndEmitGlobalDisposed } from "@/server/global-lifecycle"
-import { InstallationVersion } from "@opencode-ai/core/installation/version"
+import { InstallationChannel, InstallationVersion } from "@opencode-ai/core/installation/version"
+import { OliveCodeUpdate } from "@/installation/olivecode-update"
 import { Effect, Queue } from "effect"
 import * as Stream from "effect/Stream"
 import { HttpServerResponse } from "effect/unstable/http"
@@ -87,6 +88,18 @@ export const globalHandlers = HttpApiBuilder.group(RootHttpApi, "global", (handl
     })
 
     const upgrade = Effect.fn("GlobalHttpApi.upgrade")(function* (ctx: { payload: typeof GlobalUpgradeInput.Type }) {
+      if (InstallationChannel.startsWith("olivecode")) {
+        const target = ctx.payload.target
+        const result = yield* Effect.tryPromise(() => OliveCodeUpdate.installUpdate(target)).pipe(
+          Effect.as({ success: true as const, version: target }),
+          Effect.catch((err) =>
+            Effect.succeed({ success: false as const, error: err.cause instanceof Error ? err.cause.message : String(err) }),
+          ),
+        )
+        if (!result.success) return HttpServerResponse.jsonUnsafe(result, { status: 500 })
+        GlobalBus.emit("event", { directory: "global", payload: { type: Installation.Event.Updated.type, properties: { version: target } } })
+        return HttpServerResponse.jsonUnsafe(result)
+      }
       const method = yield* installation.method()
       if (method === "unknown") {
         return HttpServerResponse.jsonUnsafe(

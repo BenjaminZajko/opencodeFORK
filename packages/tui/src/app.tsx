@@ -1090,12 +1090,24 @@ function App(props: { onSnapshot?: () => Promise<string[]>; pluginHost: TuiPlugi
       const choice = await DialogConfirm.show(
         dialog,
         "OliveCode update available",
-        `OliveCode v${version} is available. Open the official release page? Follow the installer instructions, then restart OliveCode. Your projects and settings stay in place.`,
+        `OliveCode v${version} is available. Update now? OliveCode downloads the official release, checks it, and installs it. Your projects, chats and settings stay in place.`,
         "skip",
       )
       if (choice === false) kv.set("skipped_version", version)
-      if (choice === true)
-        void open(releasePage).catch(() => toast.show({ variant: "error", message: `Open ${releasePage} to update.` }))
+      if (choice !== true) return
+      toast.show({ variant: "info", message: `Downloading and installing OliveCode v${version}…`, duration: 120000 })
+      const result = await sdk.client.global.upgrade({ target: version }).catch((error: unknown) => ({ error, data: undefined }))
+      const data = result.data as { success?: boolean; error?: string } | undefined
+      if (!data?.success) {
+        const reason = data?.error ?? (result.error instanceof Error ? result.error.message : "The update could not be installed.")
+        await DialogAlert.show(dialog, "Update not installed", `${reason}\n\nRelease page: ${releasePage}`)
+        return
+      }
+      await DialogAlert.show(
+        dialog,
+        "OliveCode updated",
+        `OliveCode v${version} is installed. Close OliveCode and open it again (run olivecode) to start using the new version.`,
+      )
       return
     }
 
