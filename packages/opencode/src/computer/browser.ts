@@ -370,7 +370,8 @@ export class Browser {
     let launchError: Error | undefined
     this.child.once("error", (error) => { launchError = error })
     this.child.once("exit", () => { void this.close() })
-    const deadline = Date.now() + 15000
+    // A cold first start (new profile, slow disk or CI runner) can exceed 15 seconds.
+    const deadline = Date.now() + 30000
     let port = ""
     while (Date.now() < deadline) {
       signal.throwIfAborted()
