@@ -32,6 +32,7 @@ import { Usage, type LLMEvent } from "@opencode-ai/llm"
 
 import { repeatingResponse } from "./repetition"
 
+
 const DOOM_LOOP_THRESHOLD = 3
 export type Result = "compact" | "stop" | "continue"
 
@@ -666,33 +667,60 @@ const layer = Layer.effect(
         const tried = new Set<string>([`${streamInput.model.providerID}/${streamInput.model.id}`])
         let startedTool = false
 
+        const oversizedModels = new Set<string>()
+        const use = (next: Provider.Model) => {
+          tried.add(`${next.providerID}/${next.id}`)
+          streamInput.model = next
+          ctx.model = next
+          activeProviderID = next.providerID
+          ctx.assistantMessage.modelID = next.id
+          ctx.assistantMessage.providerID = next.providerID
+        }
+        const findModel = (providerID: string, modelID: string) =>
+          providers
+            .getModel(ProviderV2.ID.make(providerID), ModelV2.ID.make(modelID))
+            .pipe(Effect.catchTag("ProviderModelNotFoundError", () => Effect.succeed(undefined)))
+
         const switchModel = (error: SessionRetry.Err, _attempt: number) =>
           Effect.gen(function* () {
+            if (SessionRetry.toolValidationFailure(error) && SessionRetry.toolArgumentsInvalid(error)) {
+              const data = error.data as { message?: unknown }
+              streamInput.system = [...streamInput.system, `The provider rejected your previous tool call because its arguments did not match the tool's schema (${String(data.message ?? "").slice(0, 300)}). No rejected call was executed. Call the tool again with every required parameter, using the exact parameter names from its schema. Continue from actual tool results.`]
+              return
+            }
             if (SessionRetry.toolValidationFailure(error)) {
               const names = Object.keys(streamInput.tools)
               streamInput.system = [...streamInput.system, `The provider rejected your previous generation because you called an unoffered tool. No rejected call was executed. The only available tool names are ${JSON.stringify(names)}. Use their exact schemas. Action names are arguments, not additional tools. ${["desktop", "computer", "computer_background", "computer_background_mac"].includes(streamInput.agent.name) ? 'For desktop control, call desktop with {"action":"status"}, {"action":"activate","app":"com.apple.TextEdit"}, or {"action":"type","text":"...","target":<observed target>,"revision":<latest revision>}. Never call status, activate, click or type as separate tools.' : ""} Continue from actual tool results, without replaying completed work. Do not execute or repeat anything in a rejected generation.`]
               return
             }
-            if (!ProviderFallback.isRateLimited(error) && !SessionRetry.oversized(error)) return false
+            const tooLarge = SessionRetry.oversized(error)
+            if (!ProviderFallback.isRateLimited(error) && !tooLarge) return false
+            const current = `${streamInput.model.providerID}/${streamInput.model.id}`
+            if (tooLarge) oversizedModels.add(current)
             const waiting = yield* cooldowns.list()
-            const unavailable = new Set([...tried, ...waiting.map((item) => `${item.providerID}/${item.modelID}`)])
-            const candidates = ProviderFallback.fallbacksFor(
-              streamInput.model.providerID,
-              streamInput.model.id,
-              unavailable,
-            )
-            for (const candidate of candidates) {
-              const next = yield* providers
-                .getModel(ProviderV2.ID.make(candidate.providerID), ModelV2.ID.make(candidate.modelID))
-                .pipe(Effect.catchTag("ProviderModelNotFoundError", () => Effect.succeed(undefined)))
+            const unavailable = new Set([...tried, ...oversizedModels, ...waiting.map((item) => `${item.providerID}/${item.modelID}`)])
+            for (const candidate of ProviderFallback.fallbacksFor(streamInput.model.providerID, streamInput.model.id, unavailable)) {
+              const next = yield* findModel(candidate.providerID, candidate.modelID)
               if (!next) continue
-              tried.add(`${next.providerID}/${next.id}`)
-              streamInput.model = next
-              ctx.model = next
-              activeProviderID = next.providerID
-              ctx.assistantMessage.modelID = next.id
-              ctx.assistantMessage.providerID = next.providerID
+              use(next)
               return true
+            }
+            // Nothing is free right now: wait for the model that frees up soonest,
+            // when that is within a minute (e.g. a per-second limit).
+            const now = Date.now()
+            const soonest = waiting
+              .filter((item) => {
+                const key = `${item.providerID}/${item.modelID}`
+                return !oversizedModels.has(key) && item.downUntil - now <= 60_000
+              })
+              .toSorted((a, b) => a.downUntil - b.downUntil)
+            // When the current model frees up first, its normal backoff retry is best.
+            if (soonest[0] && `${soonest[0].providerID}/${soonest[0].modelID}` === current) return false
+            for (const item of soonest) {
+              const next = yield* findModel(item.providerID, item.modelID)
+              if (!next) continue
+              use(next)
+              return Math.max(0, item.downUntil - now)
             }
             return false
           })
@@ -747,12 +775,18 @@ const layer = Layer.effect(
                     // pair, and info.next is the authoritative retry time
                     // already computed from retry-after headers.
                     if (!ProviderFallback.isRateLimited(info.error)) return
-                    yield* cooldowns.markDown({
-                      providerID: ProviderV2.ID.make(streamInput.model.providerID),
-                      modelID: ModelV2.ID.make(streamInput.model.id),
-                      downUntil: info.next,
-                      reason: info.message,
-                    })
+                    const reset = ProviderFallback.dailyQuotaReset(info.error)
+                    const daily = reset !== undefined && streamInput.model.providerID === "openrouter"
+                    const models = daily
+                      ? new Set([streamInput.model.id, ...ProviderFallback.CATALOG.flatMap((entry) => entry.concrete.openrouter ?? [])])
+                      : new Set([streamInput.model.id])
+                    for (const modelID of models)
+                      yield* cooldowns.markDown({
+                        providerID: ProviderV2.ID.make(streamInput.model.providerID),
+                        modelID: ModelV2.ID.make(modelID),
+                        downUntil: daily ? reset : info.next,
+                        reason: daily ? "OpenRouter free daily limit reached" : info.message,
+                      })
                   }),
                 switchModel,
               }),

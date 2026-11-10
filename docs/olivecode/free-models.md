@@ -6,9 +6,17 @@ Supported accounts:
 
 - OpenRouter: only explicit `:free` variants whose catalog input and output prices are both zero. Automatic paid routing is not offered.
 - Groq Free: GPT-OSS 120B, GPT-OSS 20B, and Qwen 3.8 27B, intersected with the available provider catalog.
-- Mistral Free mode: Codestral and Mistral Small, intersected with the available catalog.
+- Mistral Free mode: Codestral and Mistral Small, intersected with the available catalog. Mistral's free tier returned a limit of 2 requests per minute on 2026-11-10, which is too slow for an agent loop, so Mistral is now the last fallback and is not used for Assist helpers. Mistral's consumer terms (effective 2026-10-12) also describe API access as limited to business customers; review before recommending it.
 - Z.ai: GLM-4.7-Flash and GLM-4.5-Flash, which Z.ai prices as free. FlashX and GLM-5.x Flash are paid or limited-time and are excluded.
 - Ollama: local models; cloud variants are excluded.
+
+How OliveCode stretches free quotas:
+
+- Groq and local Ollama models get a compact system prompt and short tool descriptions (about 10K characters instead of 34K), so a request fits Groq's free 8,000 tokens-per-minute cap and Ollama's default 4K context.
+- When OpenRouter reports its daily free limit, every OpenRouter free model is marked unavailable until the reset time, and work continues on another connected provider.
+- A request that is too large for one provider moves to another free model instead of failing. Short rate limits switch to another provider immediately; when none is free, OliveCode waits for the soonest one (up to a minute).
+- Assist helpers prefer Groq and Z.ai, keeping OpenRouter's daily quota and Mistral's per-minute quota for the model doing the work.
+- Web search is available to cloud models through keyless hosted search (Exa or Parallel). Search queries are sent to that service; local Ollama models do not get web search unless it is enabled explicitly.
 
 Use free-tier provider accounts. OliveCode cannot change a provider account's billing plan or guarantee access after its limits are exhausted. Provider quotas and availability can change. A cooldown time is a retry estimate from the provider response, not a promise that quota resets at that instant.
 

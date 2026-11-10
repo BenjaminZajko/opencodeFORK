@@ -145,8 +145,12 @@ export function selectPeers(models: Provider.Model[], lead: Provider.Model, unav
   const peers: Provider.Model[] = []
   const usedAPIs = new Set([lead.api.id])
   const usedProviders = new Set([lead.providerID])
-  for (const diverse of [true, false]) {
+  // OpenRouter's free tier allows ~50 requests/day and Mistral's 2/minute; keep
+  // them for the lead model. Helpers use providers with larger quotas first.
+  const scarce = (model: Provider.Model) => model.providerID === "openrouter" || model.providerID === "mistral"
+  for (const [diverse, allowScarce] of [[true, false], [false, false], [true, true], [false, true]]) {
     for (const model of eligible) {
+      if (!allowScarce && scarce(model)) continue
       if (usedAPIs.has(model.api.id) || (diverse && usedProviders.has(model.providerID))) continue
       usedAPIs.add(model.api.id)
       usedProviders.add(model.providerID)

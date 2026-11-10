@@ -2,7 +2,7 @@ import { PermissionV1 } from "@opencode-ai/core/v1/permission"
 import { LayerNode } from "@opencode-ai/core/effect/layer-node"
 import { describe, expect } from "bun:test"
 import path from "path"
-import { Effect } from "effect"
+import { Cause, Effect, Exit } from "effect"
 import { CrossSpawnSpawner } from "@opencode-ai/core/cross-spawn-spawner"
 import type { Tool } from "@/tool/tool"
 import { assertExternalDirectoryEffect } from "../../src/tool/external-directory"
@@ -75,6 +75,23 @@ describe("tool.assertExternalDirectory", () => {
       expect(req).toBeDefined()
       expect(req!.patterns).toEqual([expected])
       expect(req!.always).toEqual([expected])
+    }),
+  )
+
+  it.instance("points a garbled path at the matching project file instead of asking", () =>
+    Effect.gen(function* () {
+      const test = yield* TestInstance
+      yield* Effect.promise(() => Bun.write(path.join(test.directory, "tests", "test_app.py"), "x"))
+      yield* Effect.promise(() => Bun.write(path.join(test.directory, "app.py"), "x"))
+      const { requests, ctx } = makeCtx()
+      const garbled = path.join(path.dirname(test.directory), "dup-segment", path.basename(test.directory), "tests", "test_app.py")
+      const exit = yield* Effect.exit(assertExternalDirectoryEffect(ctx, garbled))
+      expect(Exit.isFailure(exit) ? String(Cause.squash(exit.cause)) : "").toContain(`Did you mean ${path.join(test.directory, "tests", "test_app.py")}`)
+      expect(requests).toHaveLength(0)
+
+      // A new file in a new outside folder still asks, even when the project has a same-named file.
+      yield* assertExternalDirectoryEffect(ctx, path.join(path.dirname(test.directory), "newapp", "app.py"))
+      expect(requests).toHaveLength(1)
     }),
   )
 

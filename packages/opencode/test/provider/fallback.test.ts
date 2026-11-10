@@ -1,5 +1,5 @@
 import { describe, it, expect } from "bun:test"
-import { CATALOG, fallbacksFor, isRateLimited, rank, rankedDefault, type Entry } from "@/provider/fallback"
+import { CATALOG, dailyQuotaReset, fallbacksFor, isRateLimited, rank, rankedDefault, type Entry } from "@/provider/fallback"
 
 function make(id: string, providers: string[], extra?: Partial<Entry>): Entry {
   return {
@@ -192,5 +192,17 @@ describe("concrete ids against models-api.json", () => {
 describe("Z.ai free models", () => {
   it("zai-only users start on the free GLM-4.7-Flash", () => {
     expect(rankedDefault(new Set(["zai"]))).toEqual({ providerID: "zai", modelID: "glm-4.7-flash" })
+  })
+})
+
+describe("dailyQuotaReset", () => {
+  const now = Date.UTC(2026, 10, 10, 13, 0, 0)
+  it("reads OpenRouter's reset time from the error body", () => {
+    const body = JSON.stringify({ error: { message: "Rate limit exceeded: free-models-per-day.", metadata: { headers: { "X-RateLimit-Reset": String(Date.UTC(2026, 10, 10, 20)) } } } })
+    expect(dailyQuotaReset({ data: { statusCode: 429, responseBody: body } }, now)).toBe(Date.UTC(2026, 10, 10, 20))
+  })
+  it("falls back to the next UTC midnight and ignores ordinary rate limits", () => {
+    expect(dailyQuotaReset({ data: { message: "Rate limit exceeded: free-models-per-day" } }, now)).toBe(Date.UTC(2026, 10, 11))
+    expect(dailyQuotaReset({ data: { statusCode: 429, message: "Rate limit exceeded: 20 per minute" } }, now)).toBeUndefined()
   })
 })

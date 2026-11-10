@@ -146,6 +146,22 @@ describe("session.retry.delay", () => {
       expect(attempts).toStrictEqual([1, 2, 3, 4, 5])
     }),
   )
+
+  it.instance("policy waits longer for rate limits, which always clear", () =>
+    Effect.gen(function* () {
+      const attempts: number[] = []
+      const error = new SessionV1.APIError({ message: "Rate limit exceeded", statusCode: 429, isRetryable: true, responseHeaders: { "retry-after-ms": "0" } }).toObject()
+      const step = yield* Schedule.toStepWithMetadata(
+        SessionRetry.policy({
+          provider: "test",
+          parse: Schema.decodeUnknownSync(SessionV1.APIError.Schema),
+          set: (info) => Effect.sync(() => { attempts.push(info.attempt) }),
+        }),
+      )
+      yield* Effect.forEach(Array.from({ length: SessionRetry.RATE_LIMIT_MAX_RETRIES + 2 }), () => Effect.ignore(step(error)))
+      expect(attempts).toHaveLength(SessionRetry.RATE_LIMIT_MAX_RETRIES)
+    }),
+  )
 })
 
 describe("session.retry.retryable", () => {
@@ -176,6 +192,19 @@ describe("session.retry.retryable", () => {
     expect(SessionRetry.retryable(oversized, "groq")).toBeUndefined()
     const temporary = new SessionV1.APIError({ statusCode: 429, message: "Rate limit reached", isRetryable: false, responseBody: body }).toObject()
     expect(SessionRetry.retryable(temporary, "groq")).toBeDefined()
+  })
+
+  test("repairs a real tool called with invalid arguments", () => {
+    const message = "Tool call validation failed: tool call validation failed: parameters for tool read did not match schema: errors: [missing properties: 'filePath']"
+    const error = new SessionV1.APIError({ statusCode: 400, message, isRetryable: false }).toObject()
+    expect(SessionRetry.toolValidationFailure(error)).toBe(true)
+    expect(SessionRetry.toolArgumentsInvalid(error)).toBe(true)
+    expect(SessionRetry.retryable(error, "groq")).toEqual({ message: "Correcting the model’s tool call" })
+  })
+
+  test("waits for Mistral's empty per-minute window", () => {
+    const error = new SessionV1.APIError({ statusCode: 429, message: "Rate limit exceeded", isRetryable: true, responseHeaders: { "x-ratelimit-limit-req-minute": "2", "x-ratelimit-remaining-req-minute": "0" } })
+    expect(SessionRetry.delay(1, error)).toBe(60_000)
   })
 
   test("retries serialized too_many_requests messages", () => {

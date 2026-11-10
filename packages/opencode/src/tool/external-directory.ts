@@ -1,4 +1,5 @@
 import path from "path"
+import { existsSync } from "fs"
 import { Effect } from "effect"
 import { InstanceState } from "@/effect/instance-state"
 import type * as Tool from "./tool"
@@ -27,6 +28,13 @@ export const assertExternalDirectoryEffect = Effect.fn("Tool.assertExternalDirec
 
   const kind = options?.kind ?? "file"
   const dir = kind === "directory" ? full : path.dirname(full)
+  // Models sometimes garble long absolute paths. Asking permission for a folder
+  // that does not exist is confusing; point at the matching project path instead.
+  if (!existsSync(dir)) {
+    const suggestion = projectSuggestion(full, ins.directory)
+    if (suggestion)
+      throw new Error(`${full} does not exist. Did you mean ${suggestion}? Use paths inside the project (${ins.directory}).`)
+  }
   const glob =
     process.platform === "win32"
       ? FSUtil.normalizePathPattern(path.join(dir, "*"))
@@ -43,6 +51,17 @@ export const assertExternalDirectoryEffect = Effect.fn("Tool.assertExternalDirec
   })
   return true
 })
+
+/** The longest trailing part of `target` that names an existing path inside `root`. */
+function projectSuggestion(target: string, root: string) {
+  const parts = target.split(/[\\/]+/).filter(Boolean)
+  // At least two segments (folder + name), so a new outside file such as
+  // ~/newapp/app.py is not redirected just because the project has an app.py.
+  return parts
+    .slice(0, -1)
+    .map((_, index) => path.join(root, ...parts.slice(index)))
+    .find((candidate) => existsSync(candidate))
+}
 
 export async function assertExternalDirectory(ctx: Tool.Context, target?: string, options?: Options) {
   return Effect.runPromise(assertExternalDirectoryEffect(ctx, target, options))

@@ -4,6 +4,7 @@ import { Cause, Clock, Duration, Effect, Schedule } from "effect"
 import { MessageV2 } from "./message-v2"
 import { iife } from "@/util/iife"
 import { isRecord } from "@/util/record"
+import { ProviderFallback } from "@/provider/fallback"
 
 export type Err = ReturnType<NamedError["toObject"]>
 
@@ -29,6 +30,10 @@ export const RETRY_JITTER_FACTOR = 0.25
 export const RETRY_MAX_DELAY_NO_HEADERS = 30_000 // 30 seconds
 export const RETRY_MAX_DELAY = 2_147_483_647 // max 32-bit signed integer for setTimeout
 export const RETRY_MAX_RETRIES = 5
+export const MAX_MODEL_SWITCHES = 8
+// Free tiers have per-minute caps that always clear; waiting beats losing the
+// work done so far. ~5 minutes of backoff, shown with a countdown and stoppable.
+export const RATE_LIMIT_MAX_RETRIES = 12
 
 const RETRYABLE_MESSAGE_PATTERNS = [
   /429|500|502|503|504|524/i,
@@ -44,7 +49,13 @@ export function toolValidationFailure(error: Err) {
   if (SessionV1.APIError.isInstance(error) && error.data.statusCode !== undefined && error.data.statusCode !== 400) return false
   const data = isRecord(error.data) ? error.data : {}
   const detail = [data.message, data.responseBody].filter((value) => typeof value === "string").join("\n")
-  return /tool call validation failed/i.test(detail) && /(?:attempted to call tool|not in request\.tools)/i.test(detail)
+  return /tool call validation failed/i.test(detail) && /(?:attempted to call tool|not in request\.tools|did not match schema|missing propert)/i.test(detail)
+}
+
+/** The provider rejected a call to a real tool because its arguments were invalid. */
+export function toolArgumentsInvalid(error: Err) {
+  const data = isRecord(error.data) ? error.data : {}
+  return [data.message, data.responseBody].some((value) => typeof value === "string" && /did not match schema|missing propert/i.test(value))
 }
 
 function cap(ms: number) {
@@ -62,6 +73,10 @@ export function delay(attempt: number, error?: SessionV1.APIError, random = Math
           return cap(parsedMs)
         }
       }
+
+      // Mistral's free tier (2 requests/minute) reports an empty minute window
+      // without retry-after; waiting a few seconds would only fail again.
+      if (headers["x-ratelimit-remaining-req-minute"] === "0") return cap(60_000)
 
       const retryAfter = headers["retry-after"]
       if (retryAfter) {
@@ -206,41 +221,61 @@ export function policy(opts: {
     next: number
     error: Err
   }) => Effect.Effect<void>
-  /** Resolves true when a different model will serve the retry. */
-  switchModel?: (error: Err, attempt: number) => Effect.Effect<boolean | void>
+  /**
+   * Called after `set` for each retryable error. Resolves true when a different
+   * model will serve the retry immediately, a number of milliseconds when the
+   * chosen model is cooling down briefly, and false/void when nothing changed.
+   */
+  switchModel?: (error: Err, attempt: number) => Effect.Effect<boolean | number | void>
   toolValidationRecovery?: boolean
 }) {
+  // Same-model retries and model switches have separate budgets: walking a
+  // fallback chain must not use up the retries of the model that finally answers.
   let toolRepairs = 0
+  let retries = 0
+  let switches = 0
   return Schedule.fromStepWithMetadata(
     Effect.succeed((meta: Schedule.InputMetadata<unknown>) => {
       const error = opts.parse(meta.input)
       const repair = toolValidationFailure(error)
       if (repair && (opts.toolValidationRecovery === false || toolRepairs >= 2)) return Cause.done(meta.attempt)
-      if (meta.attempt > RETRY_MAX_RETRIES) return Cause.done(meta.attempt)
-      if (oversized(error) && opts.switchModel) {
+      if (oversized(error)) {
         const switchModel = opts.switchModel
+        if (!switchModel || switches >= MAX_MODEL_SWITCHES) return Cause.done(meta.attempt)
         return Effect.gen(function* () {
-          if (!(yield* switchModel(error, meta.attempt))) return yield* Cause.done(meta.attempt)
+          const switched = yield* switchModel(error, meta.attempt)
+          if (switched === false || switched === undefined) return yield* Cause.done(meta.attempt)
+          switches++
+          const wait = typeof switched === "number" ? switched : 0
           const now = yield* Clock.currentTimeMillis
-          yield* opts.set({ attempt: meta.attempt, message: "Request too large for this provider's free allowance · switching to another free model", next: now, error })
-          return [meta.attempt, Duration.millis(0)] as [number, Duration.Duration]
+          yield* opts.set({ attempt: meta.attempt, message: "Request too large for this provider's free allowance · switching to another free model", next: now + wait, error })
+          return [meta.attempt, Duration.millis(wait)] as [number, Duration.Duration]
         })
       }
       const retry = retryable(error, opts.provider)
       if (!retry) return Cause.done(meta.attempt)
+      const switchModel = switches < MAX_MODEL_SWITCHES ? opts.switchModel : undefined
+      const maxRetries = ProviderFallback.isRateLimited(error) ? RATE_LIMIT_MAX_RETRIES : RETRY_MAX_RETRIES
+      if (!repair && !switchModel && retries >= maxRetries) return Cause.done(meta.attempt)
       return Effect.gen(function* () {
-        if (repair) toolRepairs++
-        const wait = repair ? 0 : delay(meta.attempt, SessionV1.APIError.isInstance(error) ? error : undefined)
+        const failed = repair ? 0 : delay(retries + 1, SessionV1.APIError.isInstance(error) ? error : undefined)
         const now = yield* Clock.currentTimeMillis
-        yield* opts.set({
-          attempt: meta.attempt,
-          message: retry.message,
-          action: retry.action,
-          next: now + wait,
-          error,
-        })
-        if (opts.switchModel) yield* opts.switchModel(error, meta.attempt)
-        return [meta.attempt, Duration.millis(wait)] as [number, Duration.Duration]
+        // `set` runs before switching so it still identifies the failed model.
+        yield* opts.set({ attempt: meta.attempt, message: retry.message, action: retry.action, next: now + failed, error })
+        if (repair) {
+          toolRepairs++
+          // switchModel adds the corrective tool list for this retry.
+          if (opts.switchModel) yield* opts.switchModel(error, meta.attempt)
+          return [meta.attempt, Duration.millis(0)] as [number, Duration.Duration]
+        }
+        const switched = switchModel ? yield* switchModel(error, meta.attempt) : false
+        if (switched !== false && switched !== undefined) {
+          switches++
+          return [meta.attempt, Duration.millis(typeof switched === "number" ? switched : 0)] as [number, Duration.Duration]
+        }
+        retries++
+        if (retries > maxRetries) return yield* Cause.done(meta.attempt)
+        return [meta.attempt, Duration.millis(failed)] as [number, Duration.Duration]
       })
     }),
   )

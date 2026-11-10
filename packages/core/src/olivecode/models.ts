@@ -40,10 +40,11 @@ const preference = [
   "groq/openai/gpt-oss-120b",
   "openrouter/dots-studio/dots-3-note-preview:free",
   "groq/qwen/qwen3.8-27b",
-  "mistral/codestral-latest",
   "openrouter/google/gemma-4-31b-it:free",
   "zai/glm-4.5-flash",
   "groq/openai/gpt-oss-20b",
+  // Mistral's free tier allows 2 requests/minute (checked 2026-11-10): last resort.
+  "mistral/codestral-latest",
   "mistral/mistral-small-latest",
 ]
 

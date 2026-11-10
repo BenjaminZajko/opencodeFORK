@@ -62,15 +62,6 @@ export const CATALOG: Entry[] = [
     concrete: { groq: "openai/gpt-oss-120b" },
   },
   {
-    id: "codestral",
-    codingScore: 0,
-    agenticScore: 0,
-    contextWindow: 131072,
-    tier: "strong",
-    providers: ["mistral"],
-    concrete: { mistral: "codestral-latest" },
-  },
-  {
     id: "gpt-oss-20b",
     codingScore: 0,
     agenticScore: 0,
@@ -87,6 +78,15 @@ export const CATALOG: Entry[] = [
     tier: "fast",
     providers: ["zai"],
     concrete: { zai: "glm-4.5-flash" },
+  },
+  {
+    id: "codestral",
+    codingScore: 0,
+    agenticScore: 0,
+    contextWindow: 131072,
+    tier: "strong",
+    providers: ["mistral"],
+    concrete: { mistral: "codestral-latest" },
   },
   {
     id: "mistral-small",
@@ -118,6 +118,23 @@ export function isRateLimited(error: { data?: unknown }): boolean {
   if (data.statusCode === 429) return true
   const haystack = [data.message, data.responseBody].filter((value): value is string => typeof value === "string")
   return haystack.some((text) => /rate limit|rate-limit|rate_limit|too many requests|\b429\b/i.test(text))
+}
+
+// OpenRouter's free tier has a per-account daily cap shared by every :free
+// model. Once hit, all of them stay unavailable until the reset time.
+export function dailyQuotaReset(error: { data?: unknown }, now = Date.now()): number | undefined {
+  if (!error.data || typeof error.data !== "object") return undefined
+  const data = error.data as { message?: unknown; responseBody?: unknown; responseHeaders?: unknown }
+  const body = typeof data.responseBody === "string" ? data.responseBody : ""
+  const text = `${typeof data.message === "string" ? data.message : ""} ${body}`
+  if (!/free-models-per-day/i.test(text)) return undefined
+  const headers = (data.responseHeaders && typeof data.responseHeaders === "object" ? data.responseHeaders : {}) as Record<string, string>
+  const fromBody = body.match(/"X-RateLimit-Reset"\s*:\s*"?(\d{10,})/i)?.[1]
+  const reset = Number(headers["x-ratelimit-reset"] ?? fromBody)
+  if (Number.isFinite(reset) && reset > now) return reset < 1e12 ? reset * 1000 : reset
+  const midnight = new Date(now)
+  midnight.setUTCHours(24, 0, 0, 0)
+  return midnight.getTime()
 }
 
 function entryTargets(entry: Entry, tried: Set<string>): Target[] {

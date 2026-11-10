@@ -1436,3 +1436,62 @@ it.live("session.processor moves a request too large for Groq's free allowance t
     },
   ),
 )
+
+it.live("session.processor survives an exhausted OpenRouter day and an oversized Groq request", () =>
+  provideTmpdirServer(
+    ({ dir, llm }) =>
+      Effect.gen(function* () {
+        const { processors, session, provider } = yield* boot()
+        const reset = Date.now() + 6 * 3600_000
+        yield* llm.error(429, { error: { message: "Rate limit exceeded: free-models-per-day. Add 10 credits to unlock 1000 free model requests per day", code: 429, metadata: { headers: { "X-RateLimit-Limit": "50", "X-RateLimit-Remaining": "0", "X-RateLimit-Reset": String(reset) } } } })
+        yield* llm.error(413, { error: { message: "Request too large for model openai/gpt-oss-120b on tokens per minute (TPM): Limit 8000, Requested 9508", type: "tokens", code: "rate_limit_exceeded" } })
+        yield* llm.text("after")
+
+        const chat = yield* session.create({})
+        const parent = yield* user(chat.id, "daily")
+        const msg = yield* assistant(chat.id, parent.id, path.resolve(dir))
+        const mdl = yield* provider.getModel(ProviderV2.ID.make("openrouter"), ModelV2.ID.make("cohere/north-mini-code:free"))
+        const handle = yield* processors.create({ assistantMessage: msg, sessionID: chat.id, model: mdl })
+        const value = yield* handle.process({
+          user: {
+            id: parent.id,
+            sessionID: chat.id,
+            role: "user",
+            time: parent.time,
+            agent: parent.agent,
+            model: { providerID: ProviderV2.ID.make("openrouter"), modelID: ModelV2.ID.make("cohere/north-mini-code:free") },
+          } satisfies SessionV1.User,
+          sessionID: chat.id,
+          model: mdl,
+          agent: agent(),
+          system: [],
+          messages: [{ role: "user", content: "daily" }],
+          tools: {},
+        })
+
+        expect(value).toBe("continue")
+        expect(yield* llm.calls).toBe(3)
+        expect(handle.message.error).toBeUndefined()
+        expect(handle.message.providerID).toBe(ProviderV2.ID.make("mistral"))
+        const cooldowns = yield* ProviderCooldown.Service
+        const waiting = yield* cooldowns.list()
+        const nemotron = waiting.find((item) => item.modelID === "nvidia/nemotron-3-ultra-550b-a55b:free")
+        expect(nemotron?.downUntil).toBe(reset)
+        expect(nemotron?.reason).toBe("OpenRouter free daily limit reached")
+      }),
+    {
+      config: (url) => {
+        const config = fallbackCfg(url)
+        const base = config.provider.openrouter
+        const model = base.models["cohere/north-mini-code:free"]
+        return {
+          provider: {
+            openrouter: { ...base, whitelist: ["cohere/north-mini-code:free", "nvidia/nemotron-3-ultra-550b-a55b:free"], models: { ...base.models, "nvidia/nemotron-3-ultra-550b-a55b:free": { ...model, id: "nvidia/nemotron-3-ultra-550b-a55b:free" } } },
+            groq: { ...base, id: "groq", whitelist: ["openai/gpt-oss-120b"], models: { "openai/gpt-oss-120b": { ...model, id: "openai/gpt-oss-120b" } } },
+            mistral: { ...base, id: "mistral", whitelist: ["codestral-latest"], models: { "codestral-latest": { ...model, id: "codestral-latest" } } },
+          },
+        }
+      },
+    },
+  ),
+)
