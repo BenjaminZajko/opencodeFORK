@@ -14,6 +14,7 @@ import { InstanceState } from "@/effect/instance-state"
 import { trimDiff } from "./edit"
 import { assertExternalDirectoryEffect } from "./external-directory"
 import * as Bom from "@/util/bom"
+import { syntaxProblem } from "./syntax-check"
 
 const MAX_PROJECT_DIAGNOSTICS_FILES = 5
 
@@ -75,6 +76,8 @@ export const WriteTool = Tool.define(
           yield* lsp.touchFile(filepath, "document")
           const diagnostics = yield* lsp.diagnostics()
           const normalizedFilepath = FSUtil.normalizePath(filepath)
+          const syntax = (diagnostics[normalizedFilepath] ?? []).length ? undefined : yield* Effect.promise(() => syntaxProblem(filepath))
+          if (syntax) output += `\n\nSyntax error in this file. Fix it before doing anything else:\n${syntax}`
           let projectDiagnosticsCount = 0
           for (const [file, issues] of Object.entries(diagnostics)) {
             const current = file === normalizedFilepath

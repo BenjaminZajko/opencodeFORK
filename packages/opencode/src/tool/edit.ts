@@ -18,6 +18,7 @@ import { Snapshot } from "@/snapshot"
 import { assertExternalDirectoryEffect } from "./external-directory"
 import { FSUtil } from "@opencode-ai/core/fs-util"
 import * as Bom from "@/util/bom"
+import { syntaxProblem } from "./syntax-check"
 
 function normalizeLineEndings(text: string): string {
   return text.replaceAll("\r\n", "\n")
@@ -199,6 +200,8 @@ export const EditTool = Tool.define(
           const normalizedFilePath = FSUtil.normalizePath(filePath)
           const block = LSP.Diagnostic.report(filePath, diagnostics[normalizedFilePath] ?? [])
           if (block) output += `\n\nLSP errors detected in this file, please fix:\n${block}`
+          const syntax = block ? undefined : yield* Effect.promise(() => syntaxProblem(filePath))
+          if (syntax) output += `\n\nSyntax error in this file after the edit. Fix it before doing anything else:\n${syntax}`
 
           return {
             metadata: {
