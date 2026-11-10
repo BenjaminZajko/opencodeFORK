@@ -176,8 +176,10 @@ try:
             })
             sequence = coordination[before:]
             assert [item[0] for item in sequence].count("planning") == 1, sequence
-            mistral_choices = next(item for item in catalog["all"] if item["id"] == "mistral")["models"]
-            assert any(item[0] == "second opinion" and item[1] in mistral_choices and item[2] for item in sequence), sequence
+            # Helpers prefer Groq; OpenRouter (50/day) and Mistral (2/minute) only when nothing else is left.
+            groq_choices = next(item for item in catalog["all"] if item["id"] == "groq")["models"]
+            assert all(item[1] in groq_choices for item in sequence if item[0] == "planning"), sequence
+            assert any(item[0] == "second opinion" and item[2] for item in sequence), sequence
             assert [item[0] for item in sequence].count("review") == 2, sequence
             assert sum(item == ("lead", models["openrouter"]) for item in sequence) >= 2, sequence
             assert any(part.get("text") == "OliveCode prompt verified" for part in result["parts"]), result
