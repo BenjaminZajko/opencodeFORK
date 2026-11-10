@@ -21,7 +21,8 @@ try {
   for (const [args, expected] of [
     [["--version"], version],
     [["--help"], "OliveCode"],
-    [["upgrade"], "To update OliveCode, run its install command again"],
+    // A copy outside the installer layout explains how to update and changes nothing.
+    [["upgrade"], "was not installed by the OliveCode installer, so it cannot update itself"],
   ] as const) {
     const child = Bun.spawn([binary, ...args], { cwd: home, env, stdout: "pipe", stderr: "pipe" })
     const timer = setTimeout(() => child.kill(), 30000)

@@ -24,6 +24,11 @@ export const UpgradeCommand = {
   },
   handler: async (args: { target?: string; method?: string }) => {
     if (InstallationChannel.startsWith("olivecode")) {
+      // Never touch a copy the installer does not manage (portable, dev, packaged elsewhere).
+      if (!OliveCodeUpdate.managedInstall()) {
+        UI.println(OliveCodeUpdate.notManagedMessage())
+        return
+      }
       const target = args.target?.replace(/^v/, "") ?? (await availableUpdate(InstallationVersion).catch(() => undefined))
       if (!target) {
         UI.println(`OliveCode ${InstallationVersion} is up to date.`)

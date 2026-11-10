@@ -67,7 +67,7 @@ export async function installUpdate(
 ) {
   if (!/^\d+\.\d+\.\d+$/.test(version)) throw new Error(`Invalid OliveCode version: ${version}`)
   const layout = options.layout ?? managedInstall()
-  if (!layout) throw new Error(notManaged())
+  if (!layout) throw new Error(notManagedMessage())
   const archive = `OliveCode-${options.target ?? releaseTarget()}.zip`
   const base = options.base ?? `${REPOSITORY}/v${version}`
   const request = options.request ?? fetch
@@ -143,7 +143,7 @@ async function run(command: string[], failure: string) {
   return stdout
 }
 
-function notManaged() {
+export function notManagedMessage() {
   const command = process.platform === "win32" ? INSTALL_COMMAND.windows : INSTALL_COMMAND.unix
   return `This copy of OliveCode was not installed by the OliveCode installer, so it cannot update itself. Run this in a terminal to install the latest version: ${command}`
 }
