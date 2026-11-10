@@ -734,7 +734,9 @@ const layer = Layer.effect(
 
             yield* stream.pipe(
               Stream.tap((event) => {
-                if (event.type.startsWith("tool-")) startedTool = true
+                // Only executed tools make a retry unsafe; a streamed tool name the
+                // provider then rejected (e.g. "read<|channel|>commentary") ran nothing.
+                if (["tool-call", "tool-result", "tool-error"].includes(event.type)) startedTool = true
                 return handleEvent(event)
               }),
               Stream.takeUntil(() => ctx.needsCompaction || repetition),
