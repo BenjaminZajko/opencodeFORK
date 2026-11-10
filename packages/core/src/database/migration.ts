@@ -1,7 +1,7 @@
 export * as DatabaseMigration from "./migration"
 
 import { sql } from "drizzle-orm"
-import { Effect, Semaphore } from "effect"
+import { Effect, Schedule, Semaphore } from "effect"
 import type { EffectDrizzleSqlite } from "@opencode-ai/effect-drizzle-sqlite"
 import { migrations } from "./migration.gen"
 import schema from "./schema.gen"
@@ -36,7 +36,12 @@ export function apply(db: Database) {
           )
         }),
       )
-    }),
+    }).pipe(
+      // Another OliveCode process may be migrating the same database at this
+      // moment (e.g. two windows opened together). Re-check after it finishes:
+      // completed migrations are then skipped, and a genuine failure repeats.
+      Effect.retry({ times: 3, schedule: Schedule.spaced("300 millis") }),
+    ),
   )
 }
 
