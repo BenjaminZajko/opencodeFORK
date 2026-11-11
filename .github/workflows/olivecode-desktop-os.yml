@@ -24,6 +24,26 @@ jobs:
         with:
           bun-version: "1.4.2"
       - run: bun install --frozen-lockfile
+      - name: Diagnose Notepad's accessibility tree
+        timeout-minutes: 3
+        shell: powershell
+        run: |
+          Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes
+          Start-Process notepad.exe; Start-Sleep 3
+          $p = Get-Process notepad | Select-Object -First 1
+          "process: $($p.ProcessName) $($p.Id) handle: $($p.MainWindowHandle) title: $($p.MainWindowTitle)"
+          $root = [System.Windows.Automation.AutomationElement]::FromHandle($p.MainWindowHandle)
+          function Dump($e, $d) {
+            if ($d -gt 6) { return }
+            $c = $e.Current
+            ('  ' * $d) + "$($c.ControlType.ProgrammaticName) name='$($c.Name)' class=$($c.ClassName) offscreen=$($c.IsOffscreen) focusable=$($c.IsKeyboardFocusable) rect=$($c.BoundingRectangle)"
+            $child = [System.Windows.Automation.TreeWalker]::ControlViewWalker.GetFirstChild($e)
+            $n = 0
+            while ($child -and $n -lt 40) { Dump $child ($d + 1); $child = [System.Windows.Automation.TreeWalker]::ControlViewWalker.GetNextSibling($child); $n++ }
+          }
+          Dump $root 0
+          "foreground: $([System.Windows.Automation.AutomationElement]::FocusedElement.Current.ControlType.ProgrammaticName)"
+          Stop-Process -Name notepad -Force
       - name: Desktop adapter drives a real Notepad
         timeout-minutes: 10
         working-directory: packages/opencode
@@ -33,7 +53,7 @@ jobs:
         run: bun test test/computer/browser.test.ts --timeout 60000
 
   linux:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
