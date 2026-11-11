@@ -71,3 +71,21 @@ for (const [width, height] of [[120, 30], [60, 20]]) test(`Computer opens phone 
     expect(frame).toContain("paired private account")
   } finally { app.renderer.destroy() }
 })
+
+test.skipIf(process.platform !== "darwin")("Advanced separate Mac is one item that opens its own short menu", async () => {
+  await using tmp = await tmpdir()
+  const app = await mountDialog(tmp.path, () => <DialogComputer />, (url) => {
+    if (url.pathname === "/agent") return json(["build", "computer", "computer_background", "computer_background_mac", "desktop"].map((name) => ({ name, mode: "primary", permission: [], options: {} })))
+  }, { width: 120, height: 30, inline: () => <ModelSourceControls /> })
+  try {
+    await app.frame("Advanced: separate Mac")
+    for (let index = 0; index < 3; index++) app.mockInput.pressKey("n", { ctrl: true })
+    app.mockInput.pressEnter()
+    const frame = await app.frame("Separate Mac (advanced)")
+    expect(frame).toContain("Use it for my next tasks")
+    if (process.arch === "arm64") expect(frame).toContain("Set up or show the separate Mac")
+    if (process.arch === "arm64") app.mockInput.pressKey("n", { ctrl: true })
+    app.mockInput.pressEnter()
+    await app.frame("■ Stop")
+  } finally { app.renderer.destroy() }
+})
