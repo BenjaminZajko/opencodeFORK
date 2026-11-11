@@ -5,7 +5,7 @@ $ErrorActionPreference = 'Stop'
 [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding($false)
 $startupError = $null
 try {
-  Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes, WindowsBase
+  Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes, WindowsBase, System.Drawing
   Add-Type -TypeDefinition @'
 using System;
 using System.Runtime.InteropServices;
@@ -64,6 +64,7 @@ public static class OliveInput {
     for(int i=0;i<count;i++) { events[i*2]=new Input { Type=0,Data=new Union { Mouse=new Mouse { Flags=right?8u:2u } } };events[i*2+1]=new Input { Type=0,Data=new Union { Mouse=new Mouse { Flags=right?16u:4u } } }; }
     Send(events);
   }
+  public static void Button(bool down) { Send(new [] { new Input { Type=0,Data=new Union { Mouse=new Mouse { Flags=down?2u:4u } } } }); }
   public static void Scroll(bool up) { Send(new [] { new Input { Type=0,Data=new Union { Mouse=new Mouse { Flags=0x800,Data=up?120u:unchecked((uint)-120) } } } }); }
 }
 '@
@@ -76,6 +77,9 @@ $script:box = $null
 $script:targets = @()
 $script:windows = @()
 $script:apps = @{}
+$script:launch = @{}
+$script:hasPrivate = $false
+$script:shot = 0
 $script:sent = $false
 $script:unverified = $false
 $blocked = @('cmd','powershell','powershell_ise','pwsh','windowsterminal','conhost','bash','wsl','mintty','wezterm','alacritty','systemsettings','credentialuibroker','keepass','keepassxc','1password','bitwarden')
@@ -83,7 +87,7 @@ $blocked = @('cmd','powershell','powershell_ise','pwsh','windowsterminal','conho
 function Status {
   $ready = $null -eq $startupError
   if ($ready) { $ready = [OliveInput]::GetForegroundWindow() -ne [IntPtr]::Zero }
-  return @{platform='Windows';experimental=$true;ready=$ready;accessibility=$ready;screenRecording=$false;capabilities=@{accessibilityText=$ready;editableText=$ready;windowSwitching=$ready;appNameSearch=$ready;mouseMove=$ready;keyboard=$ready;doubleClick=$ready;rightClick=$ready;inWindowDrag=$false;windowScreenshots=$false;onDeviceScreenText=$false;continuousVideo=$false};setup='Windows UI Automation runs as your current user. Open the requested app first. Elevated apps, UAC, private fields, terminal apps and permission settings are unavailable. Ctrl+Alt+Esc stops active input; chat Stop terminates the helper.';error=$startupError}
+  return @{platform='Windows';experimental=$true;ready=$ready;accessibility=$ready;screenRecording=$false;capabilities=@{accessibilityText=$ready;editableText=$ready;windowSwitching=$ready;appNameSearch=$ready;appLaunch=$ready;mouseMove=$ready;keyboard=$ready;doubleClick=$ready;rightClick=$ready;inWindowDrag=$ready;windowScreenshots=$ready;onDeviceScreenText=$false;continuousVideo=$false};setup='Windows UI Automation runs as your current user; no setup is needed. find_app finds running and installed apps, and activate opens an installed app. Elevated apps, UAC, private fields, terminal apps and permission settings are unavailable. Ctrl+Alt+Esc stops active input; chat Stop terminates the helper.';error=$startupError}
 }
 function Allowed($element) {
   $process = Get-Process -Id $element.Current.ProcessId
@@ -124,7 +128,7 @@ function Observe($expected=0) {
   if ($expected -and $current.Current.ProcessId -ne $expected) { throw 'The intended app is no longer active. No unrelated window was read.' }
   $script:revision++
   $script:window=$current; $script:appId=$current.Current.ProcessId; $script:box=$current.Current.BoundingRectangle
-  $script:targets=@(); $script:windows=@(); $script:unverified=$false
+  $script:targets=@(); $script:windows=@(); $script:unverified=$false; $script:hasPrivate=$false; $script:shot=0
   $controls=New-Object System.Collections.Generic.List[object]
   $text=New-Object System.Collections.Generic.List[string]
   $queue=New-Object 'System.Collections.Generic.Queue[object]'
@@ -134,7 +138,8 @@ function Observe($expected=0) {
   while ($queue.Count -gt 0 -and $nodes -lt 600) {
     $item=$queue.Dequeue(); $node=$item.node; $nodes++
     $c=$node.Current
-    if ((Private $node) -or $c.IsOffscreen) { continue }
+    if (Private $node) { $script:hasPrivate=$true; continue }
+    if ($c.IsOffscreen) { continue }
     $name=$c.Name; if ($name.Length -gt 2000) { $name=$name.Substring(0,2000) }
     if ($name) { $text.Add($name) }
     $value=''; $pattern=$null
@@ -202,10 +207,39 @@ function Perform($request) {
     foreach ($process in (Get-Process)) {
       if ($process.MainWindowHandle -eq [IntPtr]::Zero -or $blocked -contains $process.ProcessName.ToLowerInvariant() -or $process.ProcessName.IndexOf($query,[StringComparison]::OrdinalIgnoreCase) -lt 0) { continue }
       $id="pid:$($process.Id)"; $script:apps[$id]=$process.Id
-      $matches+=@{name=$process.ProcessName;bundle=$id}
+      $matches+=@{name=$process.ProcessName;bundle=$id;running=$true}
       if ($matches.Count -ge 20) { break }
     }
-    return @{apps=@($matches);note='Matching running GUI apps only. Open the requested app first. No window contents read.'}
+    # Installed apps: Start Menu shortcuts and a few built-in tools. Only paths found
+    # here can be launched; the model chooses an observed identifier, never a path.
+    $script:launch=@{}
+    $builtin=@(@{name='Notepad';path="$env:SystemRoot\System32\notepad.exe"},@{name='Paint';path="$env:SystemRoot\System32\mspaint.exe"},@{name='Calculator';path="$env:SystemRoot\System32\calc.exe"},@{name='WordPad';path="$env:ProgramFiles\Windows NT\Accessories\wordpad.exe"})
+    $shortcuts=@($env:ProgramData,$env:APPDATA) | Where-Object { $_ } | ForEach-Object { Join-Path $_ 'Microsoft\Windows\Start Menu\Programs' } | Where-Object { Test-Path $_ } | ForEach-Object { Get-ChildItem -Path $_ -Filter *.lnk -Recurse -ErrorAction SilentlyContinue } | ForEach-Object { @{name=$_.BaseName;path=$_.FullName} }
+    foreach ($app in @($builtin + $shortcuts)) {
+      if ($matches.Count -ge 20) { break }
+      $lower=$app.name.ToLowerInvariant()
+      if ($app.name.IndexOf($query,[StringComparison]::OrdinalIgnoreCase) -lt 0 -or !(Test-Path -LiteralPath $app.path)) { continue }
+      if ($lower -match 'terminal|powershell|command prompt|cmd|settings|password|keepass|bitwarden|1password|uninstall|registry|regedit') { continue }
+      if ($matches | Where-Object { $_.running -and $_.name -eq $app.name }) { continue }
+      $id="app:$($script:launch.Count+1)"; $script:launch[$id]=$app.path
+      $matches+=@{name=$app.name;bundle=$id;running=$false}
+    }
+    return @{apps=@($matches);note='Running apps use pid identifiers; installed apps use app identifiers and open with activate. No window contents read.'}
+  }
+  if ($action -eq 'activate' -and $script:launch.ContainsKey([string]$request.app)) {
+    $before=[OliveInput]::GetForegroundWindow()
+    Start-Process -FilePath $script:launch[[string]$request.app] | Out-Null
+    for ($i=0;$i -lt 60;$i++) {
+      Start-Sleep -Milliseconds 250; [OliveInput]::CheckStop()
+      $front=[OliveInput]::GetForegroundWindow()
+      if ($front -ne [IntPtr]::Zero -and $front -ne $before) {
+        $element=[System.Windows.Automation.AutomationElement]::FromHandle($front)
+        Allowed $element
+        Start-Sleep -Milliseconds 300
+        return Observe $element.Current.ProcessId
+      }
+    }
+    throw 'The app did not open a window in time. Check that it opened, then observe.'
   }
   if ($action -eq 'activate') {
     $id=$script:apps[[string]$request.app]
@@ -234,7 +268,24 @@ function Perform($request) {
     if (![OliveInput]::SetForegroundWindow([IntPtr]$window.Current.NativeWindowHandle)) { throw 'Windows refused focus. Bring the window forward manually.' }
     return Observe $script:appId
   }
-  if ($action -in @('screenshot','look','click_point','click_text','drag')) { throw 'This experimental Windows adapter does not support window capture, OCR, coordinate clicks or drag. No input sent.' }
+  if ($action -eq 'screenshot') {
+    $result=Observe $script:appId
+    if ($script:hasPrivate) { throw 'A private field is visible. Hide it before taking a screenshot.' }
+    $w=[int]$script:box.Width; $h=[int]$script:box.Height
+    if ($w -lt 1 -or $h -lt 1 -or $w -gt 8000 -or $h -gt 8000) { throw 'The window has no capturable size.' }
+    $bitmap=New-Object System.Drawing.Bitmap($w,$h)
+    $graphics=[System.Drawing.Graphics]::FromImage($bitmap)
+    try {
+      $graphics.CopyFromScreen([int]$script:box.X,[int]$script:box.Y,0,0,$bitmap.Size)
+      $stream=New-Object System.IO.MemoryStream
+      $bitmap.Save($stream,[System.Drawing.Imaging.ImageFormat]::Png)
+      $result.screenshot=@{mime='image/png';data=[Convert]::ToBase64String($stream.ToArray())}
+    } finally { $graphics.Dispose(); $bitmap.Dispose() }
+    $script:shot=$script:revision
+    $result.coordinateSystem='Coordinates are pixels from the screenshot top-left; image uses one pixel per screen pixel.'
+    return $result
+  }
+  if ($action -in @('look','click_text')) { throw 'Screen-text reading is not available on Windows yet. Use observe text, or a screenshot with an image-capable model.' }
   if ($request.restoreAfterApproval -eq $true -and $script:window) {
     $front=[System.Windows.Automation.AutomationElement]::FromHandle([OliveInput]::GetForegroundWindow())
     $name=(Get-Process -Id $front.Current.ProcessId).ProcessName.ToLowerInvariant()
@@ -243,7 +294,30 @@ function Perform($request) {
     }
   }
   Check $request
-  if ($action -in @('click','move','type','fill')) {
+  if ($action -eq 'click_point') {
+    if ($script:shot -lt 1 -or $script:shot -ne $script:revision) { throw 'Coordinate clicks need the latest approved screenshot. Take a screenshot first.' }
+    if ($null -eq $request.x -or $null -eq $request.y) { throw 'Give x and y from the latest screenshot.' }
+    $x=[double]$request.x; $y=[double]$request.y
+    if ($x -lt 0 -or $y -lt 0 -or $x -ge $script:box.Width -or $y -ge $script:box.Height) { throw 'Choose a point inside the screenshot.' }
+    $button='left';$count=1
+    if ($request.button) { $button=$request.button };if ($null -ne $request.count) { $count=$request.count }
+    if ($button -notin @('left','right') -or $count -notin @(1,2) -or ($button -eq 'right' -and $count -eq 2)) { throw 'Unsupported click gesture.' }
+    MoveTo $request ($script:box.X+$x) ($script:box.Y+$y)
+    Check $request;$script:sent=$true;[OliveInput]::Click(($button -eq 'right'),$count)
+  } elseif ($action -eq 'drag') {
+    $from=Target $request
+    $to=$request.toTarget
+    if ($null -eq $to -or ($to -isnot [int] -and $to -isnot [long]) -or $to -lt 1 -or $to -gt $script:targets.Count) { throw 'Choose toTarget from the latest observation.' }
+    $end=$script:targets[$to-1].element
+    if ((Private $end) -or (Signature $end) -ne $script:targets[$to-1].signature) { throw 'The destination changed or is private. Observe again.' }
+    $a=$from.Current.BoundingRectangle; $b=$end.Current.BoundingRectangle
+    $x1=$a.X+$a.Width/2; $y1=$a.Y+$a.Height/2; $x2=$b.X+$b.Width/2; $y2=$b.Y+$b.Height/2
+    MoveTo $request $x1 $y1
+    $script:sent=$true; [OliveInput]::Button($true)
+    try {
+      for ($i=1;$i -le 12;$i++) { [OliveInput]::CheckStop(); [void][OliveInput]::SetCursorPos([int]($x1+($x2-$x1)*$i/12),[int]($y1+($y2-$y1)*$i/12)); Start-Sleep -Milliseconds 15 }
+    } finally { [OliveInput]::Button($false) }
+  } elseif ($action -in @('click','move','type','fill')) {
     $element=$null
     if ($action -ne 'move' -or $null -ne $request.target) { $element=Target $request }
     if ($action -eq 'type' -or $action -eq 'fill') {

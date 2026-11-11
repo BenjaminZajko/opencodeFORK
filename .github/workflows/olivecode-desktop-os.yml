@@ -1,0 +1,59 @@
+name: OliveCode computer use on Windows and Linux
+
+on:
+  push:
+    branches: ['codex/release-*', 'desktop-os-check']
+    paths:
+      - 'packages/opencode/src/computer/**'
+      - 'packages/opencode/src/tool/desktop.ts'
+      - 'packages/opencode/src/tool/browser.ts'
+      - 'packages/opencode/script/desktop-os-check.ts'
+      - '.github/workflows/olivecode-desktop-os.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.4.2"
+      - run: bun install --frozen-lockfile
+      - name: Desktop adapter drives a real Notepad
+        working-directory: packages/opencode
+        run: bun script/desktop-os-check.ts notepad
+      - name: Browser control with the installed Chrome/Edge
+        working-directory: packages/opencode
+        run: bun test test/computer/browser.test.ts --timeout 60000
+
+  linux:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.4.2"
+      - run: bun install --frozen-lockfile
+      - name: Install a desktop session for the check
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends xvfb openbox dbus-x11 at-spi2-core python3-pyatspi python3-gi gir1.2-gtk-3.0 xdotool mousepad libglib2.0-bin
+      - name: Desktop adapter drives a real Mousepad
+        working-directory: packages/opencode
+        run: |
+          cat > "$RUNNER_TEMP/session.sh" <<'EOF'
+          set -e
+          export XDG_SESSION_TYPE=x11 GTK_MODULES=gail:atk-bridge NO_AT_BRIDGE=0
+          /usr/libexec/at-spi-bus-launcher --launch-immediately &
+          sleep 1
+          openbox &
+          sleep 1
+          bun script/desktop-os-check.ts mousepad
+          EOF
+          dbus-run-session -- xvfb-run -a -s "-screen 0 1280x900x24" bash "$RUNNER_TEMP/session.sh"

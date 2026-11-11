@@ -1,9 +1,13 @@
 #!/usr/bin/env python3
-"""AT-SPI desktop adapter. No shell, clipboard, screenshots or arbitrary code API.
+"""AT-SPI desktop adapter. No shell, clipboard or arbitrary code API.
 
 Semantic controls work with accessible applications. Physical pointer/keyboard
-input is restricted to X11 with xdotool; Wayland never falls back to XWayland.
+input and window screenshots are restricted to X11 (xdotool, GDK); Wayland never
+falls back to XWayland. Installed apps launch only from their .desktop entries.
 """
+import base64
+import configparser
+import glob
 import json
 import math
 import os
@@ -31,6 +35,9 @@ class Desktop:
         self.targets = []
         self.windows = []
         self.apps = {}
+        self.launch = {}
+        self.has_private = False
+        self.shot = 0
         self.sent = False
         self.unverified = False
         self.x11 = bool(os.environ.get("DISPLAY")) and os.environ.get("XDG_SESSION_TYPE") == "x11" and not os.environ.get("WAYLAND_DISPLAY")
@@ -45,8 +52,8 @@ class Desktop:
             except Exception:
                 pass
         return {"platform": "Linux", "experimental": True, "accessibility": ready, "ready": ready, "screenRecording": False,
-                "capabilities": {"accessibilityText": ready, "semanticClick": ready, "editableText": ready, "windowSwitching": ready, "appNameSearch": ready, "mouseMove": self.pointer, "keyboard": self.pointer, "rightClick": self.pointer, "doubleClick": self.pointer, "inWindowDrag": False, "windowScreenshots": False, "onDeviceScreenText": False, "continuousVideo": False},
-                "setup": "Requires Python 3, the distribution's python3-pyatspi package, a graphical user session and its accessibility bus. Open the requested app first. X11 physical input additionally requires xdotool. On Wayland only exposed semantic actions/editable text are supported; no global input, screenshot or portal bypass is used."}
+                "capabilities": {"accessibilityText": ready, "semanticClick": ready, "editableText": ready, "windowSwitching": ready, "appNameSearch": ready, "appLaunch": ready, "mouseMove": self.pointer, "keyboard": self.pointer, "rightClick": self.pointer, "doubleClick": self.pointer, "inWindowDrag": self.pointer, "scroll": self.pointer, "windowScreenshots": self.x11 and gdk() is not None, "onDeviceScreenText": False, "continuousVideo": False},
+                "setup": "Requires Python 3, the distribution's python3-pyatspi package, a graphical user session and its accessibility bus. find_app finds running and installed apps, and activate opens an installed app. X11 physical input additionally requires xdotool; screenshots need X11 and GTK (python3-gi). On Wayland only exposed semantic actions/editable text are supported; no global input, screenshot or portal bypass is used."}
 
     def require(self):
         if not self.status()["ready"]:
@@ -107,6 +114,8 @@ class Desktop:
         self.app, self.window, self.box = app, window, self.bounds(window)
         self.targets, self.windows = [], []
         self.unverified = False
+        self.has_private = False
+        self.shot = 0
         text, controls, visited = [], [], set()
         queue = [(window, 0)]
         focused = None
@@ -116,7 +125,10 @@ class Desktop:
                 return
             visited.add(hash(node))
             state = node.getState()
-            if self.private(node) or not state.contains(atspi.STATE_SHOWING):
+            if self.private(node):
+                self.has_private = True
+                return
+            if not state.contains(atspi.STATE_SHOWING):
                 return
             value = ""
             try:
@@ -175,6 +187,13 @@ class Desktop:
             raise ValueError("The control changed, is private or disabled. Observe again.")
         return node
 
+    def verified_point(self, x, y):
+        if not self.inside(x, y):
+            raise ValueError("Pointer must remain inside the observed window.")
+        hit = atspi.Registry.getDesktop(0).queryComponent().getAccessibleAtPoint(int(x), int(y), atspi.DESKTOP_COORDS)
+        if hit is None or hit.getApplication() != self.app:
+            raise ValueError("The target is covered or cannot be verified. No input sent.")
+
     def physical(self, request, *args):
         self.check(request)
         if not self.pointer:
@@ -195,7 +214,39 @@ class Desktop:
             alias = {"claude code": "claude", "codex app": "codex"}.get(query, query)
             matches = [a for a in self.children(atspi.Registry.getDesktop(0)) if self.allowed(a) and any(alias in name for name in self.identities(a))]
             self.apps = {"pid:"+str(a.get_process_id()): a for a in matches[:20]}
-            return {"apps": [{"name": str(a.name), "bundle": key} for key, a in self.apps.items()], "note": "Matching running accessible apps only. Open the app first if it is absent. No private window contents read."}
+            found = [{"name": str(a.name), "bundle": key, "running": True} for key, a in self.apps.items()]
+            # Installed apps from .desktop entries. Only entries found here can be
+            # launched; the model picks an identifier, never a command.
+            self.launch = {}
+            running = {str(a.name).casefold() for a in matches}
+            for entry in installed_apps(alias):
+                if len(found) >= 20:
+                    break
+                if entry["name"].casefold() in running:
+                    continue
+                key = "desktop:" + str(len(self.launch) + 1)
+                self.launch[key] = entry
+                found.append({"name": entry["name"], "bundle": key, "running": False})
+            return {"apps": found, "note": "Running apps use pid identifiers; installed apps use desktop identifiers and open with activate. No window contents read."}
+        if action == "activate" and request.get("app") in self.launch:
+            entry = self.launch[request.get("app")]
+            launcher = shutil.which("gio") or shutil.which("gtk-launch")
+            if launcher is None:
+                raise ValueError("Opening apps needs gio or gtk-launch. Open the app manually, then use find_app again.")
+            args = [launcher, "launch", entry["path"]] if launcher.endswith("gio") else [launcher, entry["id"]]
+            subprocess.Popen(args, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+            wanted = {entry["name"].casefold(), entry["exec"].casefold()}
+            deadline = time.time() + 20
+            while time.time() < deadline:
+                time.sleep(.3)
+                for app in self.children(atspi.Registry.getDesktop(0)):
+                    if self.allowed(app) and any(w in name or name in w for name in self.identities(app) if name for w in wanted):
+                        windows = self.children(app)
+                        if windows:
+                            windows[0].queryComponent().grabFocus()
+                            time.sleep(.3)
+                            return self.observe(app)
+            raise ValueError("The app did not open an accessible window in time. Check that it opened, then use find_app again.")
         if action == "activate":
             app = self.apps.get(request.get("app"))
             if app is None or not self.allowed(app):
@@ -226,8 +277,26 @@ class Desktop:
             if not window.queryComponent().grabFocus():
                 raise ValueError("Could not focus the observed window. Handle it manually.")
             return self.observe(self.app)
-        if action in ("screenshot", "look", "click_point", "click_text", "drag"):
-            raise ValueError("This experimental Linux adapter does not support window capture, OCR, coordinate clicks or drag. No input sent.")
+        if action == "screenshot":
+            Gdk = gdk()
+            if not self.x11 or Gdk is None:
+                raise ValueError("Window screenshots need an X11 session with GTK (python3-gi). Use observe text instead.")
+            result = self.observe(self.app) if self.app is not None else self.observe()
+            if self.has_private:
+                raise ValueError("A private field is visible. Hide it before taking a screenshot.")
+            x, y, w, h = self.box
+            pixbuf = Gdk.pixbuf_get_from_window(Gdk.get_default_root_window(), x, y, w, h)
+            if pixbuf is None:
+                raise ValueError("Could not capture the window.")
+            ok, data = pixbuf.save_to_bufferv("png", [], [])
+            if not ok:
+                raise ValueError("Could not encode the screenshot.")
+            self.shot = self.revision
+            result["screenshot"] = {"mime": "image/png", "data": base64.b64encode(data).decode("ascii")}
+            result["coordinateSystem"] = "Coordinates are pixels from the screenshot top-left; image uses one pixel per screen pixel."
+            return result
+        if action in ("look", "click_text"):
+            raise ValueError("Screen-text reading is not available on Linux yet. Use observe text, or a screenshot with an image-capable model.")
         if request.get("restoreAfterApproval") is True and self.window is not None:
             # Human approval can put OliveCode's terminal in front. Restore only
             # the previously observed window, never an arbitrary app/window.
@@ -238,7 +307,31 @@ class Desktop:
                             raise ValueError("Return to the observed app manually after approval.")
                         break
         self.check(request)
-        if action in ("click", "move", "type", "fill"):
+        if action == "click_point":
+            if self.shot < 1 or self.shot != self.revision:
+                raise ValueError("Coordinate clicks need the latest approved screenshot. Take a screenshot first.")
+            x, y = request.get("x"), request.get("y")
+            if not all(type(v) in (int, float) and math.isfinite(v) for v in (x, y)) or not (0 <= x < self.box[2] and 0 <= y < self.box[3]):
+                raise ValueError("Choose a point inside the screenshot.")
+            button, count = request.get("button", "left"), request.get("count", 1)
+            if button not in ("left", "right") or type(count) is not int or count not in (1, 2) or (button == "right" and count == 2):
+                raise ValueError("Unsupported click gesture.")
+            self.verified_point(self.box[0] + x, self.box[1] + y)
+            self.physical(request, "mousemove", "--sync", str(int(self.box[0] + x)), str(int(self.box[1] + y)), "click", "--repeat", str(count), "1" if button == "left" else "3")
+        elif action == "drag":
+            start = self.target(request)
+            index = request.get("toTarget")
+            if type(index) is not int or not 1 <= index <= len(self.targets):
+                raise ValueError("Choose toTarget from the latest observation.")
+            end, signature = self.targets[index-1]
+            if self.private(end) or self.signature(end) != signature:
+                raise ValueError("The destination changed or is private. Observe again.")
+            (ax, ay, aw, ah), (bx, by, bw, bh) = self.bounds(start), self.bounds(end)
+            x1, y1, x2, y2 = ax + aw/2, ay + ah/2, bx + bw/2, by + bh/2
+            self.verified_point(x1, y1)
+            self.verified_point(x2, y2)
+            self.physical(request, "mousemove", "--sync", str(int(x1)), str(int(y1)), "mousedown", "1", "mousemove", "--sync", str(int(x2)), str(int(y2)), "mouseup", "1")
+        elif action in ("click", "move", "type", "fill"):
             node = None if action == "move" and request.get("target") is None else self.target(request)
             if action == "click" and request.get("button", "left") == "left" and request.get("count", 1) == 1:
                 interface = node.queryAction()
@@ -293,12 +386,48 @@ class Desktop:
             direction = request.get("direction")
             if direction not in ("up", "down"):
                 raise ValueError("Choose up or down.")
-            # No unverified global scroll into whatever is under the user's cursor.
-            raise ValueError("Use the app's observed scroll controls. Global scrolling is unavailable in this adapter.")
+            # Scroll only after verifying the observed window is under the point.
+            x, y = self.box[0] + self.box[2]/2, self.box[1] + self.box[3]/2
+            self.verified_point(x, y)
+            self.physical(request, "mousemove", "--sync", str(int(x)), str(int(y)), "click", "4" if direction == "up" else "5")
         else:
             raise ValueError("Unsupported desktop action.")
         time.sleep(.15)
         return self.observe(self.app)
+
+
+def gdk():
+    try:
+        import gi
+        gi.require_version("Gdk", "3.0")
+        from gi.repository import Gdk
+        return Gdk
+    except (ImportError, ValueError):
+        return None
+
+
+def installed_apps(query):
+    """Visible .desktop entries whose name or command matches the query."""
+    folders = [os.path.expanduser("~/.local/share/applications"), "/usr/local/share/applications", "/usr/share/applications", "/var/lib/flatpak/exports/share/applications", "/var/lib/snapd/desktop/applications"]
+    found, seen = [], set()
+    for folder in folders:
+        for path in sorted(glob.glob(os.path.join(folder, "*.desktop")))[:2000]:
+            parser = configparser.RawConfigParser(interpolation=None, strict=False)
+            try:
+                parser.read(path, encoding="utf-8")
+                entry = parser["Desktop Entry"]
+            except (configparser.Error, KeyError, UnicodeDecodeError, OSError):
+                continue
+            name = entry.get("Name", "").strip()
+            command = os.path.basename((entry.get("Exec", "").split() or [""])[0])
+            identity = (name + " " + command + " " + os.path.basename(path)).casefold()
+            if not name or entry.get("Type", "Application") != "Application" or entry.get("NoDisplay", "").lower() == "true" or entry.get("Terminal", "").lower() == "true":
+                continue
+            if any(word in identity for word in ("terminal", "settings", "password", "keyring", "keepass", "konsole", "xterm")) or query not in identity or name in seen:
+                continue
+            seen.add(name)
+            found.append({"name": name, "exec": command, "path": path, "id": os.path.basename(path)[:-8]})
+    return found[:20]
 
 
 def main():
