@@ -650,10 +650,11 @@ const layer = Layer.effect(
             : JSON.stringify(mergeDeep(isRecord(original) ? original : writable(existing), writable(config)), null, 2),
         )
         .pipe(Effect.orDie)
-      if (Object.keys(config).length === 1 && config.collaboration) {
+      if (preferenceOnly(config)) {
         // These task preferences do not require tearing down an active session.
         yield* InstanceState.use(state, (s) => {
-          s.config.collaboration = { ...s.config.collaboration, ...config.collaboration }
+          if (config.collaboration) s.config.collaboration = { ...s.config.collaboration, ...config.collaboration }
+          if (config.computer) s.config.computer = { ...s.config.computer, ...config.computer }
         })
       }
     })
@@ -706,5 +707,11 @@ export const node = LayerNode.make({
   layer: layer,
   deps: [FSUtil.node, Auth.node, Account.node, Env.node, Npm.node, httpClient],
 })
+
+/** Updates that only change live task preferences (Assist, Computer) and need no instance restart. */
+export function preferenceOnly(config: { collaboration?: unknown; computer?: unknown }) {
+  const keys = Object.keys(config)
+  return keys.length > 0 && keys.every((key) => key === "collaboration" || key === "computer")
+}
 
 export * as Config from "./config"

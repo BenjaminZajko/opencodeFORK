@@ -9,6 +9,8 @@ export interface Interface {
   readonly claimAction: (session: string, message: string) => Effect.Effect<void, Error>
   readonly perform: (session: string, request: string, input: ComputerBrowser.Action, signal: AbortSignal, background?: boolean) => Effect.Effect<unknown, Error>
   readonly stop: (session: string) => Effect.Effect<void>
+  /** Whether this chat's open browser is headless; undefined when no browser is open. */
+  readonly browserBackground: (session: string) => Effect.Effect<boolean | undefined>
   readonly desktop: (session: string, request: string, input: ComputerDesktop.Action, signal: AbortSignal, background?: boolean) => Effect.Effect<ComputerDesktop.Result, Error>
   readonly holdDesktop: (session: string, request: string, background?: boolean) => Effect.Effect<() => void, Error>
 }
@@ -72,6 +74,11 @@ const layer = Layer.effect(Service, Effect.gen(function* () {
       return yield* Effect.tryPromise({ try: () => desktop.perform(input, signal), catch: (error) => error instanceof Error ? error : new Error(String(error)) }).pipe(
         Effect.onInterrupt(() => Effect.sync(() => desktop.close())),
       )
+    }),
+    browserBackground: Effect.fn("Computer.browserBackground")(function* (session) {
+      const { browsers } = yield* InstanceState.get(state)
+      const entry = browsers.get(session)
+      return entry && !entry.browser.stopped ? entry.background : undefined
     }),
     stop: Effect.fn("Computer.stop")(function* (session) {
       const { browsers, desktops } = yield* InstanceState.get(state)

@@ -17,7 +17,7 @@ export const configHandlers = HttpApiBuilder.group(InstanceHttpApi, "config", (h
 
     const update = Effect.fn("ConfigHttpApi.update")(function* (ctx) {
       yield* configSvc.update(ctx.payload)
-      if (!(Object.keys(ctx.payload).length === 1 && ctx.payload.collaboration))
+      if (!Config.preferenceOnly(ctx.payload))
         yield* markInstanceForDisposal(yield* InstanceState.context)
       return ctx.payload
     })

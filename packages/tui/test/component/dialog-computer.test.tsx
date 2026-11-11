@@ -8,44 +8,18 @@ import { json } from "../fixture/tui-sdk"
 import { LocationProvider } from "../../src/context/location"
 import { PermissionPrompt } from "../../src/routes/session/permission"
 
-test("Computer mode explains its scope, shows Stop, and returns to coding", async () => {
+test("Computer is a short settings menu with everything on by default", async () => {
   await using tmp = await tmpdir()
-  const app = await mountDialog(tmp.path, () => <DialogComputer />, (url) => {
-    if (url.pathname === "/agent") return json(["build", "computer", "computer_background", "computer_background_mac", "desktop"].map((name) => ({ name, mode: "primary", permission: [], options: {} })))
-  }, { width: 120, height: 30, inline: () => <ModelSourceControls /> })
+  const app = await mountDialog(tmp.path, () => <DialogComputer />, () => undefined, { width: 120, height: 30, inline: () => <ModelSourceControls /> })
   try {
-    const frame = await app.frame("Start visible control")
-    expect(frame).toContain("Allow always")
-    expect(frame).toContain("Window captures ask separately")
-    if (process.platform === "darwin") expect(frame).toContain("Websites + Mac apps")
+    const frame = await app.frame("Computer use")
+    expect(frame).toMatch(/Computer use\s+On/)
+    expect(frame).toMatch(/Show browser window\s+Off/)
+    expect(frame).toContain("Every action asks for your approval first")
+    expect(frame).not.toContain("Start visible control")
+    expect(frame).not.toContain("Start background browser")
     app.mockInput.pressEnter()
-    await app.frame("■ Stop")
-    app.open()
-    await app.frame("Visible control is on")
-    app.mockInput.pressKey("n", { ctrl: true })
-    app.mockInput.pressKey("n", { ctrl: true })
-    if (process.platform === "darwin") app.mockInput.pressKey("n", { ctrl: true })
-    await app.renderOnce()
-    app.mockInput.pressEnter()
-    await app.frame("Computer ▾")
-    await app.frame("■ Stop", false)
-  } finally { app.renderer.destroy() }
-})
-
-test.skipIf(process.platform !== "darwin")("one Computer entry covers websites and Mac apps with visible Stop", async () => {
-  await using tmp = await tmpdir()
-  const app = await mountDialog(tmp.path, () => <DialogComputer />, (url) => {
-    if (url.pathname === "/agent") return json(["build", "computer", "computer_background", "computer_background_mac", "desktop"].map((name) => ({ name, mode: "primary", permission: [], options: {} })))
-  }, { width: 120, height: 30, inline: () => <ModelSourceControls /> })
-  try {
-    const initial = await app.frame("Websites + Mac apps")
-    expect(initial).not.toContain("Control Mac apps")
-    app.mockInput.pressEnter()
-    await app.frame("■ Stop")
-    app.open()
-    const frame = await app.frame("Visible control is on")
-    expect(frame).toContain("Control+Option+Esc")
-    expect(frame).toContain("smooth pointer movement")
+    await app.frame("Computer use Off")
   } finally { app.renderer.destroy() }
 })
 
@@ -64,21 +38,6 @@ for (const permission of ["browser", "browser_screenshot", "desktop", "desktop_s
     } finally { app.renderer.destroy() }
   })
 }
-
-test("Computer explains screen-text recognition in a small terminal", async () => {
-  await using tmp = await tmpdir()
-  const app = await mountDialog(tmp.path, () => <DialogComputer />, (url) => {
-    if (url.pathname === "/agent") return json(["build", "computer", "computer_background", "computer_background_mac", "desktop"].map((name) => ({ name, mode: "primary", permission: [], options: {} })))
-  }, { width: 60, height: 20 })
-  try {
-    const frame = await app.frame("Model:")
-    expect(frame).toContain(process.platform === "darwin" ? "on-device reading" : "browser text")
-    expect(frame).toContain("Captures ask")
-    expect(frame).toContain("Stop ends control")
-    expect(frame).toContain("Allow always")
-  } finally { app.renderer.destroy() }
-})
-
 
 for (const [name, input, extra] of [
   ["right-click", { action: "click", button: "right", target: 1 }, {}],
@@ -99,42 +58,12 @@ for (const [name, input, extra] of [
 })
 
 
-test("background mode starts independently and keeps Stop available", async () => {
-  await using tmp = await tmpdir()
-  const app = await mountDialog(tmp.path, () => <DialogComputer />, (url) => {
-    if (url.pathname === "/agent") return json(["build", "computer", "computer_background", "computer_background_mac", "desktop"].map((name) => ({ name, mode: "primary", permission: [], options: {} })))
-  }, { width: 120, height: 30, inline: () => <ModelSourceControls /> })
-  try {
-    const frame = await app.frame("Start background browser")
-    expect(frame).toContain(process.platform === "darwin" ? "Mac apps and manual login need Visible control" : "Apps and manual login need Visible control")
-    app.mockInput.pressKey("n", { ctrl: true }); app.mockInput.pressEnter()
-    await app.frame("■ Stop")
-    app.open(); await app.frame("Background browser is on")
-  } finally { app.renderer.destroy() }
-})
-
-
-test.skipIf(process.platform !== "darwin")("Background Mac clearly requires an isolated Mac and preserves Stop", async () => {
-  await using tmp = await tmpdir()
-  const app = await mountDialog(tmp.path, () => <DialogComputer />, (url) => {
-    if (url.pathname === "/agent") return json(["build", "computer", "computer_background", "computer_background_mac", "desktop"].map((name) => ({ name, mode: "primary", permission: [], options: {} })))
-  }, { width: 120, height: 30, inline: () => <ModelSourceControls /> })
-  try {
-    const frame = await app.frame("Start background Mac")
-    expect(frame).toContain("isolated Mac required")
-    if (process.arch === "arm64") expect(frame).toContain("Set up / show background Mac")
-    app.mockInput.pressKey("n", { ctrl: true }); app.mockInput.pressKey("n", { ctrl: true }); app.mockInput.pressEnter()
-    await app.frame("■ Stop")
-    app.open(); await app.frame("Background Mac is on")
-  } finally { app.renderer.destroy() }
-})
-
 for (const [width, height] of [[120, 30], [60, 20]]) test(`Computer opens phone Remote at ${width}x${height}`, async () => {
   await using tmp = await tmpdir()
   const app = await mountDialog(tmp.path, () => <DialogComputer />, () => undefined, { width, height })
   try {
-    await app.frame("Start visible control")
-    for (let index = 0; index < (process.platform === "darwin" ? 4 : 3); index++) app.mockInput.pressKey("n", { ctrl: true })
+    await app.frame("Computer use")
+    for (let index = 0; index < 2; index++) app.mockInput.pressKey("n", { ctrl: true })
     await app.frame("Remote from phone")
     app.mockInput.pressEnter()
     const frame = await app.frame("Connect Telegram")

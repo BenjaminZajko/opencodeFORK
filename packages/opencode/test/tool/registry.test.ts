@@ -59,6 +59,10 @@ const replacements = [
 ] as const
 
 const it = testEffect(LayerNode.compile(root, replacements))
+const computerOff = testEffect(LayerNode.compile(root, [
+  [Config.node, TestConfig.layer({ get: () => Effect.succeed({ computer: { enabled: false } }) })],
+  [RuntimeFlags.node, RuntimeFlags.layer()],
+]))
 const withCodeMode = testEffect(
   LayerNode.compile(root, [
     [Config.node, configLayer],
@@ -149,9 +153,23 @@ describe("tool.registry", () => {
       expect(Permission.evaluate("bash", "*", desktop.permission).action).toBe("deny")
       const native = yield* registry.tools({ ...input, agent: desktop })
       expect(native.map((tool) => tool.id).sort()).toEqual(["desktop", "invalid", "question", "todowrite"])
+      // Normal chat gets computer tools by default, and every action asks.
+      const chat = yield* agents.get("build")
+      const build = yield* registry.tools({ ...input, agent: chat })
+      expect(build.some((tool) => tool.id === "browser")).toBe(true)
+      expect(build.some((tool) => tool.id === "desktop")).toBe(true)
+      for (const permission of ["browser", "browser_screenshot", "desktop", "desktop_screenshot"])
+        expect(Permission.evaluate(permission, "*", chat.permission).action).toBe("ask")
+    }),
+  )
+
+  computerOff.instance("Computer use can be turned off for normal chat", () =>
+    Effect.gen(function* () {
+      const registry = yield* ToolRegistry.Service
+      const agents = yield* Agent.Service
+      const input = { providerID: ProviderV2.ID.make("openrouter"), modelID: ModelV2.ID.make("test") }
       const build = yield* registry.tools({ ...input, agent: yield* agents.get("build") })
-      expect(build.some((tool) => tool.id === "browser")).toBe(false)
-      expect(build.some((tool) => tool.id === "desktop")).toBe(false)
+      expect(build.some((tool) => tool.id === "browser" || tool.id === "desktop")).toBe(false)
     }),
   )
 

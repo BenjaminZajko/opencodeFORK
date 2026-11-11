@@ -1,4 +1,3 @@
-import { useTerminalDimensions } from "@opentui/solid"
 import { createSignal, onMount } from "solid-js"
 import { useSync } from "../context/sync"
 import { useLocal } from "../context/local"
@@ -14,43 +13,38 @@ import { DialogRemote } from "./dialog-remote"
 export function DialogComputer() {
   const local = useLocal()
   const sync = useSync()
-  const dimensions = useTerminalDimensions()
-  const compact = () => dimensions().height < 26 || dimensions().width < 80
-  const sight = () => {
-    const model = local.model.current()
-    const info = model && sync.data.provider.find((provider) => provider.id === model.providerID)?.models[model.modelID]
-    if (compact()) return info?.capabilities.input.image ? process.platform === "darwin" ? "Model: images + text" : "Model: browser images + app text" : process.platform === "darwin" ? "Model: text + on-device reading" : "Model: app + browser text"
-    return info?.capabilities.input.image ? process.platform === "darwin" ? "Current model: images + window text" : "Current model: browser images + accessible app text" : process.platform === "darwin" ? "Current model: window text + local screen-text recognition" : "Current model: app + browser text"
-  }
   const route = useRoute()
   const sdk = useSDK()
   const dialog = useDialog()
   const toast = useToast()
   const { theme } = useTheme()
   const request = useDialogRequest()
+  const [saving, setSaving] = createSignal(false)
   onMount(() => dialog.setSize("large"))
-  const [stopping, setStopping] = createSignal(false)
-  const [remoteHovered, setRemoteHovered] = createSignal(false)
-  async function start(agent: string) {
-    setStopping(true)
+  // Older chats may still be in a separate Computer mode; offer a way back.
+  const legacy = () => ["computer", "computer_background", "computer_background_mac", "desktop"].includes(local.agent.current()?.name ?? "")
+  const setting = (key: "enabled" | "showBrowser") => sync.data.config.computer?.[key] ?? key === "enabled"
+  async function toggle(key: "enabled" | "showBrowser") {
+    if (saving()) return
+    setSaving(true)
+    const value = !setting(key)
+    try {
+      const result = await request((signal) => sdk.client.config.update({ config: { computer: { [key]: value } } }, { signal }))
+      if (result.error) throw new Error("Could not save computer settings")
+      sync.set("config", "computer", { ...sync.data.config.computer, [key]: value })
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") return
+      toast.show({ message: "Could not save computer settings. Try again.", variant: "error" })
+    } finally {
+      setSaving(false)
+    }
+  }
+  async function backToChat() {
+    setSaving(true)
     try {
       if (route.data.type === "session") {
         const sessionID = route.data.sessionID
         const result = await request((signal) => sdk.client.session.abort({ sessionID }, { signal }))
-        if (result.error) throw new Error("Could not stop the previous task")
-      }
-      const model = local.model.current()
-      local.agent.set(agent)
-      if (model) local.model.set(model)
-      dialog.clear()
-    } catch { toast.show({ message: "Could not switch modes. Stop the current task and try again.", variant: "error" }) }
-    finally { setStopping(false) }
-  }
-  async function stop() {
-    setStopping(true)
-    try {
-      if (route.data.type === "session") {
-        const result = await request((signal) => sdk.client.session.abort({ sessionID: route.data.type === "session" ? route.data.sessionID : "" }, { signal }))
         if (result.error) throw new Error("Could not stop computer control")
       }
       const model = local.model.current()
@@ -59,53 +53,22 @@ export function DialogComputer() {
       dialog.clear()
     } catch {
       toast.show({ message: "Could not stop. Press Esc twice or close OliveCode.", variant: "error" })
-    } finally { setStopping(false) }
+    } finally { setSaving(false) }
   }
-  async function setupMac() {
-    setStopping(true)
-    try {
-      const compiled = process.execPath.endsWith("olivecode") || process.execPath.endsWith("opencode")
-      const command = compiled ? [process.execPath, "background-mac"] : [process.execPath, process.argv[1]!, "background-mac"]
-      const child = Bun.spawn(command, { stdin: "ignore", stdout: "pipe", stderr: "pipe" })
-      const [out, err, code] = await Promise.all([new Response(child.stdout).text(), new Response(child.stderr).text(), child.exited])
-      if (code !== 0) throw new Error(err.trim() || "Could not open Background Mac setup. Use the packaged OliveCode build.")
-      toast.show({ message: out.trim() || "Background Mac setup opened.", variant: "success" })
-    } catch (error) {
-      toast.show({ message: error instanceof Error ? error.message : "Could not open Background Mac setup.", variant: "error" })
-    } finally { setStopping(false) }
-  }
-  return <DialogSelect title="Computer" renderFilter={false} locked={stopping()} detailIndent={6} showOverflowCue
+  const apps = process.platform === "darwin" ? "Mac apps" : process.platform === "win32" ? "Windows apps (experimental)" : "Linux apps (experimental)"
+  return <DialogSelect title="Computer" renderFilter={false} preserveSelection locked={saving()} detailIndent={6}
     options={[
-      { title: local.agent.current()?.name === "computer" ? "Visible control is on" : "Start visible control", value: "start", description: process.platform === "darwin" ? "Websites + Mac apps" : process.platform === "win32" ? "Websites + Windows apps · experimental" : "Websites + Linux apps · experimental",
-        details: ["Watch the task in its browser or app window.", process.platform === "darwin" ? "Uses your mouse and keyboard for Mac apps · smooth pointer movement." : "Accessible running apps · check setup and supported controls before input."],
-        onSelect: () => void start("computer") },
-      { title: local.agent.current()?.name === "computer_background" ? "Background browser is on" : "Start background browser", value: "background", description: "Websites · keep working",
-        details: ["An isolated browser works without taking your cursor or opening a window.", process.platform === "darwin" ? "Check progress in this chat. Mac apps and manual login need Visible control." : "Check progress in this chat. Apps and manual login need Visible control."],
-        onSelect: () => void start("computer_background") },
-      ...(process.platform === "darwin" ? [{ title: local.agent.current()?.name === "computer_background_mac" ? "Background Mac is on" : "Start background Mac", value: "background-mac", description: "Mac apps + websites · isolated Mac required",
-        details: ["Uses a separate macOS VM or Mac, with its own apps, files and permissions.", "Setup: trusted SSH connection and OliveCode Computer installed there. Progress stays in chat."],
-        onSelect: () => void start("computer_background_mac") }] : []),
-      { title: "Stop and return to coding", value: "stop", description: stopping() ? "Stopping…" : "End control",
-        details: ["Stops mouse and keyboard control and closes the separate browser."], onSelect: () => void stop() },
-      { title: "Remote from phone", value: "remote", description: "Telegram · WhatsApp setup",
-        details: ["Connect your phone and start remote tasks from here.", "Approve actions on your phone. Your computer must stay awake."], onSelect: () => dialog.replace(() => <DialogRemote />) },
-      ...(process.platform === "darwin" && process.arch === "arm64" ? [{ title: "Set up / show background Mac", value: "setup-mac", description: "Create and manage a separate Mac",
-        details: ["Open the VM manager · start, shut down or show its screen.", "macOS downloads only when you choose Create. Initial guest setup and connection are manual."], onSelect: () => void setupMac() }] : []),
-    ].map((option) => ({ ...option, details: compact() ? [] : option.details }))}
+      ...(legacy() ? [{ title: "Return to normal chat", value: "back", description: "Stop the old Computer mode", onSelect: () => void backToChat() }] : []),
+      { title: "Computer use", value: "enabled", description: setting("enabled") ? "On" : "Off",
+        details: [`OliveCode can use websites and ${apps} when you ask for it in chat.`, "Every action asks for your approval first."], onSelect: () => void toggle("enabled") },
+      { title: "Show browser window", value: "showBrowser", description: setting("showBrowser") ? "On" : "Off",
+        details: ["Off: websites open in a hidden browser so you can keep working.", "OliveCode can show it when you need to log in."], onSelect: () => void toggle("showBrowser") },
+      { title: "Remote from phone", value: "remote", description: "Telegram · WhatsApp", onSelect: () => dialog.replace(() => <DialogRemote />) },
+    ]}
     footer={<box paddingLeft={2} paddingRight={2} gap={0}>
-      {!compact() && <box flexDirection="row">
-        <box paddingLeft={1} paddingRight={1}
-          backgroundColor={remoteHovered() && !stopping() ? theme.primary : theme.backgroundElement}
-          onMouseOver={() => setRemoteHovered(true)} onMouseOut={() => setRemoteHovered(false)}
-          onMouseUp={() => { if (!stopping()) dialog.replace(() => <DialogRemote />) }}>
-          <text fg={remoteHovered() && !stopping() ? theme.background : theme.primary}><span style={{ bold: true }}>Remote from phone →</span></text>
-        </box>
-      </box>}
-      {!compact() && process.platform === "darwin" && process.arch === "arm64" && <text fg={theme.primary} onMouseUp={() => { if (!stopping()) void setupMac() }}>Set up / show background Mac →</text>}
-      <text fg={theme.primary}>{sight()}</text>
-      <text fg={theme.textMuted}>{compact() ? "Captures ask · text may also go to Assist" : "Window captures ask separately. Text goes to your model and Assist; images only to image models."}</text>
-      <text fg={theme.textMuted}>{compact() ? "Allow always: this chat · private fields manual" : "Allow always applies to this chat until restart. Private fields stay manual."}</text>
-      <text fg={theme.textMuted}>{compact() ? "■ Stop ends control · /computer to switch" : process.platform === "darwin" ? "Use ■ Stop beside Assist to end control · Control+Option+Esc stops Mac app control." : process.platform === "win32" ? "Use ■ Stop to end control · Ctrl+Alt+Esc stops active Windows input." : "Use ■ Stop to end app control. Wayland supports exposed app controls only."}</text>
+      <text fg={theme.textMuted}>Just ask in chat, e.g. “check the weather on example.com” or “open TextEdit and write a note”.</text>
+      <text fg={theme.textMuted}>{process.platform === "darwin" ? "The first Mac app task asks you to allow OliveCode Computer in System Settings." : "App control uses your system's accessibility features."}</text>
+      <text fg={theme.textMuted}>{saving() ? "Saving…" : process.platform === "darwin" ? "Stop anytime: Esc twice · Control+Option+Esc stops app control." : "Stop anytime: Esc twice."}</text>
     </box>}
   />
 }

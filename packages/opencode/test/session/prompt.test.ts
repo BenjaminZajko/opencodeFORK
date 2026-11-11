@@ -189,7 +189,7 @@ const desktopFixture = Layer.effect(Computer.Service, Effect.sync(() => {
   let text = ""
   return Computer.Service.of({
     claimAction: () => Effect.void,
-    holdDesktop: () => Effect.succeed(() => {}), stop: () => Effect.void,
+    holdDesktop: () => Effect.succeed(() => {}), stop: () => Effect.void, browserBackground: () => Effect.succeed(undefined),
     perform: () => Effect.succeed({ revision: 1, url: "https://example.com", text: "Example Domain", controls: [] }),
     desktop: (_session, _request, action) => Effect.sync(() => {
       desktopActions.push(action)

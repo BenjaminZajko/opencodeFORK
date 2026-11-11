@@ -302,11 +302,13 @@ const layer = Layer.effect(
     })
 
     const tools: Interface["tools"] = Effect.fn("ToolRegistry.tools")(function* (input) {
+      // Normal chat can use websites and apps when a request needs them (setting, on by default).
+      const computerInChat = input.agent.name === "build" && (yield* config.get()).computer?.enabled !== false
       const filtered = (yield* all()).filter((tool) => {
         if (input.agent.name === "desktop") return ["desktop", "question", "todowrite", "invalid"].includes(tool.id)
         if (input.agent.name === "computer_background") return ["browser", "question", "todowrite", "invalid"].includes(tool.id)
         if (["computer", "computer_background_mac"].includes(input.agent.name)) return ["browser", "desktop", "question", "todowrite", "invalid"].includes(tool.id)
-        if (["browser", "desktop"].includes(tool.id)) return false
+        if (["browser", "desktop"].includes(tool.id)) return computerInChat
         if (tool.id === WebSearchTool.id) {
           return webSearchEnabled(input.providerID, { exa: flags.enableExa, parallel: flags.enableParallel })
         }

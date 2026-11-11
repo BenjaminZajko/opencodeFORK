@@ -1891,6 +1891,10 @@ export type Config = {
     teamwork?: boolean
     followThrough?: boolean
   }
+  computer?: {
+    enabled?: boolean
+    showBrowser?: boolean
+  }
   $schema?: string
   shell?: string
   logLevel?: LogLevel

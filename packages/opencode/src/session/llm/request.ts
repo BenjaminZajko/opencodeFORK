@@ -50,6 +50,9 @@ export type Prepared = {
   readonly headers: Record<string, string>
 }
 
+// Short guidance so normal chat uses websites and apps only when the request needs them.
+const COMPUTER_IN_CHAT = `Computer use: you also have a browser tool (OliveCode's own separate browser, hidden by default) and, when available, a desktop tool for apps on this computer. Use them only when the request involves a website or an app; for code and files, use the normal tools. Every browser/desktop action is approved by the person. For a website, open it with the browser tool, then act on numbered controls from the latest observation and verify the result on the page; pass visible: true when the person wants to watch or must log in. For a desktop app, first call desktop with {"action":"status"}. If it reports that a permission such as Accessibility is missing, call desktop with {"action":"setup"} to open the right System Settings page, then tell the person in one short sentence to turn on OliveCode Computer there and reply when done; do not retry until they confirm. Never claim a website or app action succeeded without observing it.`
+
 const mergeOptions = (target: Record<string, any>, source: Record<string, any> | undefined): Record<string, any> =>
   mergeDeep(target, source ?? {}) as Record<string, any>
 
@@ -60,6 +63,7 @@ export const prepare = Effect.fn("LLMRequestPrep.prepare")(function* (input: Pre
       ...(input.agent.prompt ? [input.agent.prompt] : SystemPrompt.provider(input.model)),
       ...input.system,
       ...(input.user.system ? [input.user.system] : []),
+      ...(input.agent.name === "build" && (input.tools.browser || input.tools.desktop) ? [COMPUTER_IN_CHAT] : []),
       ...(input.model.providerID === "ollama" && !input.small
         ? [
             "Use the provided tool API when a task needs a tool. Never print tool-call JSON as your reply. Use only the exact file path requested by the user or a path inside the current project; never use example paths such as /path/to/file.txt. Answer ordinary conversation directly; do not create a todo list for a simple greeting.",

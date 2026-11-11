@@ -151,6 +151,11 @@ const layer = Layer.effect(
               Permission.fromConfig({
                 question: "allow",
                 plan_enter: "allow",
+                // Computer use is available in normal chat; every action is approved by the human.
+                browser: "ask",
+                browser_screenshot: "ask",
+                desktop: "ask",
+                desktop_screenshot: "ask",
               }),
               user,
             ),

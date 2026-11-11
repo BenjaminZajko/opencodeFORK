@@ -34,6 +34,10 @@ export const Info = Schema.Struct({
     teamwork: Schema.optional(Schema.Boolean).annotate({ description: "Use other available free models for planning and review. Defaults to true." }),
     followThrough: Schema.optional(Schema.Boolean).annotate({ description: "Review task completion and continue concrete unfinished work. Defaults to true." }),
   })),
+  computer: Schema.optional(Schema.Struct({
+    enabled: Schema.optional(Schema.Boolean).annotate({ description: "Let the chat use websites and apps when a request needs them, with approval for each action. Defaults to true." }),
+    showBrowser: Schema.optional(Schema.Boolean).annotate({ description: "Show the browser window instead of working in the background. Defaults to false." }),
+  })),
   $schema: Schema.optional(Schema.String).annotate({
     description: "JSON schema reference for configuration validation",
   }),

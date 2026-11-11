@@ -49,7 +49,7 @@ export function ModelSourceControls() {
     <box flexDirection="row" gap={1} flexShrink={0}>
       <box flexShrink={0} backgroundColor={theme.backgroundElement} paddingLeft={1} paddingRight={1}
         onMouseUp={() => ["computer", "computer_background", "computer_background_mac", "desktop"].includes(local.agent.current()?.name ?? "") ? void stopComputer() : dialog.replace(() => <DialogComputer />)}>
-        <text fg={["computer", "computer_background", "computer_background_mac", "desktop"].includes(local.agent.current()?.name ?? "") ? theme.warning : theme.textMuted}>
+        <text fg={["computer", "computer_background", "computer_background_mac", "desktop"].includes(local.agent.current()?.name ?? "") ? theme.warning : (sync.data.config.computer?.enabled ?? true) ? theme.primary : theme.textMuted}>
           {["computer", "computer_background", "computer_background_mac", "desktop"].includes(local.agent.current()?.name ?? "") ? (stopping() ? "Stopping…" : "■ Stop") : "Computer ▾"}
         </text>
       </box>
