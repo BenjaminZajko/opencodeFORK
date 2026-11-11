@@ -66,6 +66,8 @@ jobs:
         env:
           DEBIAN_FRONTEND: noninteractive
         run: |
+          # GitHub's default Ubuntu mirror has been failing DNS; use another official mirror.
+          echo "https://mirrors.edge.kernel.org/ubuntu/" | sudo tee /etc/apt/apt-mirrors.txt
           for attempt in 1 2 3; do
             sudo apt-get -o Acquire::Retries=3 update && sudo apt-get install -y --no-install-recommends xvfb openbox dbus-x11 at-spi2-core python3-pyatspi python3-gi gir1.2-gtk-3.0 xdotool mousepad libglib2.0-bin && break
             sleep 20

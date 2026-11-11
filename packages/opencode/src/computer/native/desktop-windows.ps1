@@ -146,10 +146,13 @@ function Observe($expected=0) {
     if ($node.TryGetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern,[ref]$pattern)) { $value=$pattern.Current.Value }
     if ($value) { $text.Add($value.Substring(0,[Math]::Min(2000,$value.Length))) }
     $b=$c.BoundingRectangle
-    $interactive=$c.IsKeyboardFocusable -or $c.ControlType -in @([System.Windows.Automation.ControlType]::Button,[System.Windows.Automation.ControlType]::MenuItem,[System.Windows.Automation.ControlType]::DataItem,[System.Windows.Automation.ControlType]::TabItem,[System.Windows.Automation.ControlType]::Hyperlink)
+    # Classic Win32 text controls can surface as plain panes when UIA's proxies are absent.
+    $textClass=$c.ClassName -match '^(Edit|RichEdit\w*|RICHEDIT\w*)$'
+    $interactive=$textClass -or $c.IsKeyboardFocusable -or $c.ControlType -in @([System.Windows.Automation.ControlType]::Button,[System.Windows.Automation.ControlType]::MenuItem,[System.Windows.Automation.ControlType]::DataItem,[System.Windows.Automation.ControlType]::TabItem,[System.Windows.Automation.ControlType]::Hyperlink)
     if ($interactive -and $script:targets.Count -lt 120 -and $b.Width -gt 0 -and $b.Height -gt 0 -and $script:box.Contains($b.X+$b.Width/2,$b.Y+$b.Height/2)) {
       $role=$c.ControlType.ProgrammaticName.Replace('ControlType.','')
       $role=@{Edit='AXTextField';Document='AXTextArea';ComboBox='AXComboBox';Button='AXButton';CheckBox='AXCheckBox';DataItem='AXCell';Hyperlink='AXLink'}[$role]
+      if ($textClass) { $role='AXTextArea' }
       if (!$role) { $role=$c.ControlType.ProgrammaticName }
       $script:targets+=@{element=$node;signature=(Signature $node)}
       $controls.Add(@{target=$script:targets.Count;role=$role;name=$name.Substring(0,[Math]::Min(160,$name.Length));value=$value.Substring(0,[Math]::Min(300,$value.Length));enabled=$c.IsEnabled;bounds=@{x=$b.X-$script:box.X;y=$b.Y-$script:box.Y;width=$b.Width;height=$b.Height}})
@@ -333,7 +336,7 @@ function Perform($request) {
         if ($pattern.Current.IsReadOnly) { throw 'This text control is read-only.' }
         $script:sent=$true; $pattern.SetValue($request.text)
       } else {
-        if ($element.Current.ControlType -notin @([System.Windows.Automation.ControlType]::Edit,[System.Windows.Automation.ControlType]::Document,[System.Windows.Automation.ControlType]::ComboBox)) { throw 'Choose an editable text control.' }
+        if ($element.Current.ControlType -notin @([System.Windows.Automation.ControlType]::Edit,[System.Windows.Automation.ControlType]::Document,[System.Windows.Automation.ControlType]::ComboBox) -and $element.Current.ClassName -notmatch '^(Edit|RichEdit\w*|RICHEDIT\w*)$') { throw 'Choose an editable text control.' }
         $element.SetFocus()
         $focused=$false
         for ($i=0;$i -lt 20;$i++) {
