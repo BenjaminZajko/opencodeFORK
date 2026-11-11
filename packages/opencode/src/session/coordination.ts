@@ -34,7 +34,7 @@ export function worthCoordinating(text: string) {
 export function resumedRequest(request: string, messages: SessionV1.WithParts[], agent: string) {
   const acknowledged = /^(?:i(?:'ve| have)?\s+)?(?:enabled(?:\s+it)?|allowed(?:\s+it)?|granted(?:\s+it)?|done|ready|continue|try again)[.!\s]*$/i.test(request.trim())
     || /^(?:i(?: am|'m)? (?:giving|give) you (?:permission|access)|you have (?:my )?permission)(?:[^\n?!]{0,100})[.!\s]*$/i.test(request.trim())
-  if (!["computer", "computer_background", "computer_background_mac", "desktop"].includes(agent) || !acknowledged) return request
+  if (!["build", "computer", "computer_background", "computer_background_mac", "desktop"].includes(agent) || !acknowledged) return request
   const prior = messages.filter((message) => message.info.role === "user" && message.info.agent === agent).slice(0, -1).findLast((message) =>
     message.parts.some((part) => part.type === "text" && !part.synthetic && !part.ignored && worthCoordinating(part.text)))
   if (!prior) return request
@@ -49,7 +49,7 @@ export function failedComputerAction(messages: SessionV1.WithParts[], agent?: st
   const request = resumedRequest(text, messages, agent ?? "")
   const appRequest = /\b(?:control|open|read|inspect|use|access|operate)\b[\s\S]*\b(?:codex|claude(?:\s+code)?|excel|textedit|libreoffice|desktop apps?|native apps?|mac apps?)\b/i.test(request)
     || /\b(?:codex|claude(?:\s+code)?|excel|textedit|libreoffice)\b[\s\S]*\b(?:conversation|window|control|open)\b/i.test(request)
-  if (["computer", "desktop", "computer_background_mac"].includes(agent ?? "") && appRequest
+  if (["build", "computer", "desktop", "computer_background_mac"].includes(agent ?? "") && appRequest
     && !/\b(?:do not|don't|never)\s+(?:control|open|read|access|operate)\b/i.test(request)
     && !current.some((message) => message.parts.some((part) => part.type === "tool" && part.tool === "desktop")))
     return "The requested native app task has not checked the available desktop tool. Call desktop status first, then find_app for the requested app if ready. A missing website browser does not prove app control is unavailable. Report actual setup/capability evidence rather than repeating a generic refusal or asking for a website URL."
@@ -207,6 +207,43 @@ export function evidence(messages: SessionV1.WithParts[]) {
   }).join("\n\n")
 }
 
+/** Teamwork planning is for real work; questions and lookups go straight to the model. */
+export function worthPlanning(text: string) {
+  const request = text.trim()
+  if (/^(?:what|how|why|where|who|when|which|is|are|can|could|does|do|tell me|explain|show me|find out)\b/i.test(request) && !/\b(?:and then|then)\b.*\b(?:fix|build|implement|add|refactor|write)\b/i.test(request)) return false
+  return /\b(?:build|create|make|fix|implement|write|refactor|debug|test|update|migrate|add|remove|improve|rename|port|convert|design)\b/i.test(request)
+}
+
+export const MAX_HANDOFFS = 2
+
+/**
+ * The working model is stuck when its last three shell commands produced the
+ * same failure (ignoring timings). Returns that failure, shortened.
+ */
+export function repeatedFailure(messages: SessionV1.WithParts[]) {
+  const runs = messages.flatMap((message) => message.parts).filter((part): part is SessionV1.ToolPart =>
+    part.type === "tool" && part.tool === "bash" && ["completed", "error"].includes(part.state.status))
+  const last = runs.slice(-3)
+  if (last.length < 3) return
+  const outputs = last.map((part) => part.state.status === "completed" ? part.state.output : part.state.status === "error" ? part.state.error : "")
+  const normalized = outputs.map((output) => output.replace(/\b\d+(?:\.\d+)?\s*(?:ms|s|sec|seconds?)\b/gi, "#").replace(/0x[0-9a-f]+/gi, "#").trim())
+  if (!normalized[0] || normalized.some((value) => value !== normalized[0])) return
+  if (!/\b(?:fail(?:ed|ure|s)?|error|exception|traceback|not ok|cannot|undefined)\b|✗/i.test(outputs[0]!)) return
+  return outputs[0]!.slice(-800)
+}
+
+/** The strongest other free model for continuing a stuck task, preferring another provider. */
+export function selectRescue(models: Provider.Model[], lead: Provider.Model, unavailable: Set<string>) {
+  const eligible = models.filter((model) =>
+    (model.providerID === "ollama") === (lead.providerID === "ollama") &&
+    freeModel(model.providerID, model.id, model) &&
+    model.capabilities?.toolcall !== false &&
+    !unavailable.has(`${model.providerID}/${model.id}`) &&
+    !(model.providerID === lead.providerID && model.id === lead.id),
+  ).toSorted((a, b) => modelPriority(a.providerID, a.id) - modelPriority(b.providerID, b.id))
+  return eligible.find((model) => model.providerID !== lead.providerID) ?? eligible[0]
+}
+
 export function toolActivity(messages: SessionV1.WithParts[]) {
   return messages.flatMap((message) => message.parts).filter((part) =>
     part.type === "tool" && !part.metadata?.[MARKER] && ["completed", "error"].includes(part.state.status),
@@ -253,6 +290,7 @@ export class Service extends Context.Service<Service, {
   checkpoint: (input: Input) => Effect.Effect<string | undefined>
   review: (input: Input & { teamwork: boolean; round: number }) => Effect.Effect<Review | undefined>
   notice: (input: Pick<Input, "sessionID" | "messageID"> & { title: string; text: string }) => Effect.Effect<void>
+  rescue: (lead: Provider.Model) => Effect.Effect<Provider.Model | undefined>
 }>()("@olivecode/Coordination") {}
 
 const layer = Layer.effect(Service, Effect.gen(function* () {
@@ -293,6 +331,15 @@ const layer = Layer.effect(Service, Effect.gen(function* () {
       return selectPeers(models.filter((model) => model.providerID === "ollama" && installed.has(model.id)), lead, unavailable)
     }
     return selectPeers(models, lead, unavailable)
+  })
+
+  const rescue = Effect.fn("Coordination.rescue")(function* (lead: Provider.Model) {
+    const providers = yield* provider.list()
+    const unavailable = new Set((yield* cooldowns.list()).map((item) => `${item.providerID}/${item.modelID}`))
+    const models = Object.values(providers).flatMap((item) => Object.values(item.models))
+    if (lead.providerID !== "ollama") return selectRescue(models, lead, unavailable)
+    const installed = new Set((yield* Effect.promise(ollamaStatus)).models)
+    return selectRescue(models.filter((model) => model.providerID === "ollama" && installed.has(model.id)), lead, unavailable)
   })
 
   const ask = Effect.fn("Coordination.ask")(function* (input: Input, model: Provider.Model, prompt: string, title: string, discussion?: string) {
@@ -397,7 +444,7 @@ const layer = Layer.effect(Service, Effect.gen(function* () {
         summary: verdicts.map((item) => `${item.model}: ${item.verdict.summary}`).join("\n"),
         gaps: [...new Set(verdicts.flatMap((item) => item.verdict.gaps))].slice(0, 8),
       }
-      const failure = ["computer", "computer_background", "computer_background_mac", "desktop"].includes(input.agent.name) ? failedComputerAction(input.messages, input.agent.name) : undefined
+      const failure = ["build", "computer", "computer_background", "computer_background_mac", "desktop"].includes(input.agent.name) ? failedComputerAction(input.messages, input.agent.name) : undefined
       if (failure && verdict.status === "complete") {
         verdict.status = "continue"
         verdict.summary = "Completion rejected: the most recent input outcome is not verified."
@@ -406,7 +453,7 @@ const layer = Layer.effect(Service, Effect.gen(function* () {
       yield* notice({ ...input, title: `Follow-through · ${verdict.status === "complete" ? "complete" : verdict.status === "needs_input" ? "needs your input" : "more work identified"}`, text: [verdict.summary, ...verdict.gaps].join("\n") })
       return verdict
     }
-    const failure = ["computer", "computer_background", "computer_background_mac", "desktop"].includes(input.agent.name) ? failedComputerAction(input.messages, input.agent.name) : undefined
+    const failure = ["build", "computer", "computer_background", "computer_background_mac", "desktop"].includes(input.agent.name) ? failedComputerAction(input.messages, input.agent.name) : undefined
     if (failure) {
       yield* notice({ ...input, title: "Follow-through · more work identified", text: failure })
       return { status: "continue" as const, summary: "The most recent input outcome is not verified.", gaps: [failure] }
@@ -414,7 +461,7 @@ const layer = Layer.effect(Service, Effect.gen(function* () {
     yield* notice({ ...input, title: "Follow-through · review unavailable", text: "No valid review was available. The result has not received a completion check." })
     return undefined
   })
-  return Service.of({ plan, checkpoint, review, notice })
+  return Service.of({ plan, checkpoint, review, notice, rescue })
 }))
 
 export const node = LayerNode.make({ service: Service, layer, deps: [Provider.node, ProviderCooldown.node, LLM.node, Session.node, Ripgrep.node] })

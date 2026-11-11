@@ -1096,6 +1096,11 @@ const layer = Layer.effect(
         let feedback = ""
         let reviews = 0
         let checkpoints = 0
+        // Teamwork hand-off: a different model continues when the current one is stuck.
+        let handoff: Provider.Model | undefined
+        let handoffs = 0
+        let handoffAt = 0
+        let handoffNote = ""
         let checkpointActivity = 0
         let reviewActivity = 0
         let previousGaps: string[] = []
@@ -1236,7 +1241,20 @@ const layer = Layer.effect(
               history: msgs,
             }).pipe(Effect.ignore, Effect.forkIn(scope))
 
-          const model = yield* getModel(lastUser.model.providerID, lastUser.model.modelID, sessionID)
+          const chosen = yield* getModel(lastUser.model.providerID, lastUser.model.modelID, sessionID)
+          if (coordinate && collaboration.teamwork && handoffs < Coordination.MAX_HANDOFFS && lastAssistant) {
+            const stuck = Coordination.repeatedFailure(taskMessages.filter((message) => message.info.time.created >= handoffAt))
+            const current = handoff ?? chosen
+            const next = stuck ? yield* coordination.rescue(current) : undefined
+            if (stuck && next) {
+              handoff = next
+              handoffs++
+              handoffAt = Date.now()
+              handoffNote = `You are taking over this task from ${current.name}, which ran the same command three times and kept getting this failure:\n${stuck}\nDo not repeat its last approach. Re-read the relevant files, find the root cause, and fix it differently.`
+              yield* coordination.notice({ sessionID, messageID: lastAssistant.id, title: `Teamwork · handing off to ${next.name}`, text: `${current.name} repeated the same failure three times, so ${next.name} continues the task.` })
+            }
+          }
+          const model = handoff ?? chosen
           const task = tasks.pop()
 
           if (task?.type === "subtask") {
@@ -1366,6 +1384,8 @@ const layer = Layer.effect(
               ...(skills ? [skills] : []),
             ]
             if (responseRecovery) system.push(responseRecovery)
+            if (handoffNote) system.push(handoffNote)
+            if (coordinate && collaboration.teamwork && plans === undefined && !Coordination.worthPlanning(request)) plans = []
             if (coordinate && collaboration.teamwork && plans === undefined) {
               plans = yield* coordination.plan({ sessionID, messageID: msg.id, user: lastUser, agent, lead: model, request, messages: taskMessages })
             }
