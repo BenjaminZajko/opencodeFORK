@@ -25,6 +25,7 @@ jobs:
           bun-version: "1.4.2"
       - run: bun install --frozen-lockfile
       - name: Desktop adapter drives a real Notepad
+        timeout-minutes: 10
         working-directory: packages/opencode
         run: bun script/desktop-os-check.ts notepad
       - name: Browser control with the installed Chrome/Edge
@@ -41,10 +42,16 @@ jobs:
           bun-version: "1.4.2"
       - run: bun install --frozen-lockfile
       - name: Install a desktop session for the check
+        timeout-minutes: 12
+        env:
+          DEBIAN_FRONTEND: noninteractive
         run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends xvfb openbox dbus-x11 at-spi2-core python3-pyatspi python3-gi gir1.2-gtk-3.0 xdotool mousepad libglib2.0-bin
+          for attempt in 1 2 3; do
+            sudo apt-get -o Acquire::Retries=3 update && sudo apt-get install -y --no-install-recommends xvfb openbox dbus-x11 at-spi2-core python3-pyatspi python3-gi gir1.2-gtk-3.0 xdotool mousepad libglib2.0-bin && break
+            sleep 20
+          done
       - name: Desktop adapter drives a real Mousepad
+        timeout-minutes: 10
         working-directory: packages/opencode
         run: |
           cat > "$RUNNER_TEMP/session.sh" <<'EOF'

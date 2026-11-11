@@ -220,7 +220,7 @@ function Perform($request) {
       $lower=$app.name.ToLowerInvariant()
       if ($app.name.IndexOf($query,[StringComparison]::OrdinalIgnoreCase) -lt 0 -or !(Test-Path -LiteralPath $app.path)) { continue }
       if ($lower -match 'terminal|powershell|command prompt|cmd|settings|password|keepass|bitwarden|1password|uninstall|registry|regedit') { continue }
-      if ($matches | Where-Object { $_.running -and $_.name -eq $app.name }) { continue }
+      if ($matches | Where-Object { $_.name -eq $app.name }) { continue }
       $id="app:$($script:launch.Count+1)"; $script:launch[$id]=$app.path
       $matches+=@{name=$app.name;bundle=$id;running=$false}
     }
@@ -235,8 +235,14 @@ function Perform($request) {
       if ($front -ne [IntPtr]::Zero -and $front -ne $before) {
         $element=[System.Windows.Automation.AutomationElement]::FromHandle($front)
         Allowed $element
-        Start-Sleep -Milliseconds 300
-        return Observe $element.Current.ProcessId
+        # A new window builds its controls over a moment; wait until they appear.
+        $result=$null
+        for ($j=0;$j -lt 12;$j++) {
+          Start-Sleep -Milliseconds 400
+          $result=Observe $element.Current.ProcessId
+          if ($result.controls.Count -gt 0) { break }
+        }
+        return $result
       }
     }
     throw 'The app did not open a window in time. Check that it opened, then observe.'

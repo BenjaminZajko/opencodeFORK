@@ -43,7 +43,11 @@ const app = found.apps.find((item: { running: boolean }) => !item.running) ?? fo
 if (!app) throw new Error(`find_app did not find ${query}`)
 
 let observation = must(await send({ action: "activate", app: app.bundle }))
-console.log("opened", observation.app, "-", observation.title, "controls:", observation.controls.length)
+console.log("opened", observation.app, "-", observation.title, "controls:", observation.controls.length, "text:", JSON.stringify(String(observation.text).slice(0, 300)))
+if (!observation.controls.length) {
+  observation = must(await send({ action: "observe" }))
+  console.log("re-observed controls:", JSON.stringify(observation.controls).slice(0, 1500))
+}
 const field = editable(observation.controls)
 if (!field) throw new Error("No editable text control: " + JSON.stringify(observation.controls.map((c: { role: string }) => c.role)))
 
