@@ -22,7 +22,7 @@ function must(reply: Reply) {
   if (!reply.ok || !reply.result) throw new Error(reply.error ?? "no result")
   return reply.result
 }
-const editable = (controls: { role: string }[]) =>
+const editable = (controls: { role: string; target: number }[]) =>
   controls.find((control) => ["AXTextArea", "AXTextField", "ControlType.Document", "ControlType.Edit"].includes(control.role))
 
 const failures: string[] = []

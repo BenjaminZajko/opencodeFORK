@@ -81,7 +81,7 @@ class Contract(unittest.TestCase):
     def test_claude_code_alias_discovers_the_requested_desktop_app(self):
         self.app.name = "Claude"
         result = self.desktop.perform({"action": "find_app", "query": "Claude Code"})
-        self.assertEqual(result["apps"], [{"name": "Claude", "bundle": "pid:42"}])
+        self.assertEqual(result["apps"][0], {"name": "Claude", "bundle": "pid:42", "running": True})
     def test_stale_revision_sends_no_input(self):
         request = self.request("fill", text="B2")
         self.desktop.observe()
@@ -104,9 +104,11 @@ class Contract(unittest.TestCase):
         with patch.object(module.subprocess, "run") as run:
             with self.assertRaisesRegex(ValueError, "Wayland input is unavailable"): self.desktop.perform(self.request("key", key="a", modifiers=["control"]))
             run.assert_not_called()
-    def test_unsupported_capture_or_drag_never_send_input(self):
-        for action in ("screenshot", "look", "drag", "click_point"):
-            with self.assertRaisesRegex(ValueError, "does not support"): self.desktop.perform(self.request(action))
+    def test_capture_and_pointer_actions_without_x11_never_send_input(self):
+        # This fixture has no X11 session: screenshots and pointer gestures are refused before any input.
+        expected = {"screenshot": "X11", "look": "not available", "drag": "toTarget|X11|xdotool", "click_point": "screenshot first"}
+        for action, message in expected.items():
+            with self.assertRaisesRegex(ValueError, message): self.desktop.perform(self.request(action, toTarget=1))
             self.assertFalse(self.desktop.sent)
     def test_selected_text_cannot_be_deleted_before_failed_insert(self):
         self.field.selection = 1

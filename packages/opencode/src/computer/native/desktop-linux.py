@@ -187,6 +187,10 @@ class Desktop:
             raise ValueError("The control changed, is private or disabled. Observe again.")
         return node
 
+    def require_pointer(self):
+        if not self.pointer:
+            raise ValueError("This needs an X11 session with xdotool. Wayland input is unavailable; use exposed semantic controls or handle this step manually.")
+
     def verified_point(self, x, y):
         if not self.inside(x, y):
             raise ValueError("Pointer must remain inside the observed window.")
@@ -319,6 +323,7 @@ class Desktop:
             self.verified_point(self.box[0] + x, self.box[1] + y)
             self.physical(request, "mousemove", "--sync", str(int(self.box[0] + x)), str(int(self.box[1] + y)), "click", "--repeat", str(count), "1" if button == "left" else "3")
         elif action == "drag":
+            self.require_pointer()
             start = self.target(request)
             index = request.get("toTarget")
             if type(index) is not int or not 1 <= index <= len(self.targets):
@@ -386,6 +391,7 @@ class Desktop:
             direction = request.get("direction")
             if direction not in ("up", "down"):
                 raise ValueError("Choose up or down.")
+            self.require_pointer()
             # Scroll only after verifying the observed window is under the point.
             x, y = self.box[0] + self.box[2]/2, self.box[1] + self.box[3]/2
             self.verified_point(x, y)
