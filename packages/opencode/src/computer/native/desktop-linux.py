@@ -323,7 +323,7 @@ class Desktop:
             if button not in ("left", "right") or type(count) is not int or count not in (1, 2) or (button == "right" and count == 2):
                 raise ValueError("Unsupported click gesture.")
             self.verified_point(self.box[0] + x, self.box[1] + y)
-            self.physical(request, "mousemove", "--sync", str(int(self.box[0] + x)), str(int(self.box[1] + y)), "click", "--repeat", str(count), "1" if button == "left" else "3")
+            self.physical(request, "mousemove", str(int(self.box[0] + x)), str(int(self.box[1] + y)), "click", "--repeat", str(count), "1" if button == "left" else "3")
         elif action == "drag":
             self.require_pointer()
             start = self.target(request)
@@ -337,7 +337,7 @@ class Desktop:
             x1, y1, x2, y2 = ax + aw/2, ay + ah/2, bx + bw/2, by + bh/2
             self.verified_point(x1, y1)
             self.verified_point(x2, y2)
-            self.physical(request, "mousemove", "--sync", str(int(x1)), str(int(y1)), "mousedown", "1", "mousemove", "--sync", str(int(x2)), str(int(y2)), "mouseup", "1")
+            self.physical(request, "mousemove", str(int(x1)), str(int(y1)), "mousedown", "1", "mousemove", str(int(x2)), str(int(y2)), "mouseup", "1")
         elif action in ("click", "move", "type", "fill"):
             node = None if action == "move" and request.get("target") is None else self.target(request)
             if action == "click" and request.get("button", "left") == "left" and request.get("count", 1) == 1:
@@ -372,7 +372,7 @@ class Desktop:
                         raise ValueError("Choose finite window-relative coordinates.")
                     x += self.box[0]; y += self.box[1]
                 self.verified_point(x, y)
-                self.physical(request, "mousemove", "--sync", str(int(x)), str(int(y)))
+                self.physical(request, "mousemove", str(int(x)), str(int(y)))
                 if action == "click":
                     button, count = request.get("button", "left"), request.get("count", 1)
                     if button not in ("left", "right") or type(count) is not int or count not in (1, 2) or (button == "right" and count == 2):
@@ -392,7 +392,7 @@ class Desktop:
             # Scroll only after verifying the observed window is under the point.
             x, y = self.box[0] + self.box[2]/2, self.box[1] + self.box[3]/2
             self.verified_point(x, y)
-            self.physical(request, "mousemove", "--sync", str(int(x)), str(int(y)), "click", "4" if direction == "up" else "5")
+            self.physical(request, "mousemove", str(int(x)), str(int(y)), "click", "4" if direction == "up" else "5")
         else:
             raise ValueError("Unsupported desktop action.")
         time.sleep(.15)

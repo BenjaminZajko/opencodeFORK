@@ -83,7 +83,7 @@ export function browserProfileRoot(executable: string, os = process.platform, ho
   // Ubuntu Snap Chromium cannot use another process's private /tmp namespace.
   // Keep only OliveCode's fresh temporary profiles in the Snap common area.
   return os === "linux" && (executable.startsWith("/snap/") || executable === "/usr/bin/chromium-browser")
-    ? path.join(home, "snap/chromium/common/olivecode-profiles") : temporary
+    ? path.posix.join(home, "snap/chromium/common/olivecode-profiles") : temporary
 }
 
 type Pending = { resolve(value: any): void; reject(error: Error): void; timer: ReturnType<typeof setTimeout> }
