@@ -19,17 +19,19 @@ destination/Unicode verification. The updated build passes the focused automated
 checks and the physical app-switch/Stop retest. This is still preview
 functionality; real Windows/Linux acceptance remains pending.
 
-| Feature | macOS | Windows preview | Linux preview |
+| Feature | macOS | Windows | Linux |
 | --- | --- | --- | --- |
-| Dedicated visible/background browser | Implemented; locally tested | Implemented; real OS run pending | Implemented; real OS run pending |
-| Native app observations, controls, app/window focus | Implemented; live Mac app tests | UI Automation; live OS run pending | AT-SPI; live OS run pending |
-| Native app discovery | Installed apps | Matching running GUI apps | Matching running accessible apps |
-| Native text editing | Observed editors; composite control checks | Writable ValuePattern fill or focused editor typing | AT-SPI editable text; atomic fill; selected-range type refused |
-| Pointer / key / right and double-click | Implemented | Implemented; live OS run pending | X11 + xdotool only; live OS run pending |
-| Semantic app buttons | Physical target clicks | UI Automation Invoke where available | Exposed AT-SPI click/press/activate/toggle |
-| Native screenshots / local OCR / coordinate clicks / drag | Implemented, separate capture permission | Unavailable | Unavailable |
-| Native scrolling | Implemented | Bounded observed-window scroll | Use exposed app controls; no global scroll |
-| Emergency Stop | Chat Stop; Ctrl+Option+Esc | Chat Stop; Ctrl+Alt+Esc checked during input | Chat Stop; helper termination |
+| Websites (OliveCode's own browser) | Tested | Tested on a real Windows machine (Chrome/Edge) | Tested (Chromium) |
+| Read app windows, click, type, keys | Tested | Tested with Notepad on real Windows | Tested with Mousepad on real Linux (X11) |
+| Open installed apps that are not running | Yes | Start Menu apps and Notepad/Paint/Calculator | `.desktop` apps via gio/gtk-launch |
+| Window screenshots, click on a screenshot, drag | Yes | Yes | X11 only (GTK, xdotool) |
+| Scrolling | Yes | Yes | X11 only |
+| Screen-text reading (OCR) | Yes | Not yet | Not yet |
+| Copy and paste in OliveCode | Yes | Tested (PowerShell clipboard) | Tested without xclip (GTK clipboard via XWayland) |
+| Separate virtual Mac | Yes | Not applicable | Not applicable |
+| Emergency stop | Chat Stop; Ctrl+Option+Esc | Chat Stop; Ctrl+Alt+Esc | Chat Stop |
+
+Windows and Linux results come from the `OliveCode computer use on Windows and Linux` CI workflow, which drives the real adapters on GitHub's Windows and Ubuntu machines (2026-11-12). Wayland sessions support exposed app controls and typing only; pointer input, scrolling and screenshots need X11.
 
 Windows uses the built-in Windows PowerShell and Microsoft UI Automation, without elevation or execution-policy changes. Open the app first, then request it by name. UAC, elevated/protected apps, terminals, permission settings, private fields and password managers are outside this adapter. Linux requires the distribution's Python 3/pyatspi package and the current graphical user's accessibility bus. It uses only exposed semantic controls on Wayland; it does not inject through XWayland or bypass a compositor. X11 physical actions require xdotool. Neither adapter installs dependencies, grants permissions or falls back to shell tools.
 
