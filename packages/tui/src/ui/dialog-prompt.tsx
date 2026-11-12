@@ -5,6 +5,7 @@ import { Show, createEffect, createSignal, onMount, type JSX } from "solid-js"
 import { Spinner } from "../component/spinner"
 import { useTuiConfig } from "../config"
 import { useBindings, useCommandShortcut } from "../keymap"
+import { useClipboard } from "../context/clipboard"
 
 export type DialogPromptProps = {
   title: string
@@ -21,6 +22,7 @@ export function DialogPrompt(props: DialogPromptProps) {
   const dialog = useDialog()
   const { theme } = useTheme()
   const tuiConfig = useTuiConfig()
+  const clipboard = useClipboard()
   const submitShortcut = useCommandShortcut("dialog.prompt.submit")
   const [textareaTarget, setTextareaTarget] = createSignal<TextareaRenderable>()
   let textarea: TextareaRenderable
@@ -42,8 +44,23 @@ export function DialogPrompt(props: DialogPromptProps) {
         category: "Dialog",
         run: confirm,
       },
+      {
+        // Terminals on Linux/Windows do not paste on Ctrl+V by themselves; read
+        // the clipboard so API keys and names can be pasted like in the prompt.
+        name: "dialog.prompt.paste",
+        title: "Paste into dialog",
+        category: "Dialog",
+        run: async () => {
+          const content = await clipboard.read?.().catch(() => undefined)
+          if (content?.mime !== "text/plain" || !content.data || !textarea || textarea.isDestroyed) return
+          textarea.insertText(content.data.replace(/\r\n/g, "\n").replace(/\r/g, "\n").replace(/\n+$/, ""))
+        },
+      },
     ],
-    bindings: tuiConfig.keybinds.gather("dialog.prompt", ["dialog.prompt.submit"]),
+    bindings: [
+      ...tuiConfig.keybinds.gather("dialog.prompt", ["dialog.prompt.submit"]),
+      ...tuiConfig.keybinds.get("prompt.paste").map((binding) => ({ ...binding, cmd: "dialog.prompt.paste", preventDefault: true })),
+    ],
   }))
 
   onMount(() => {

@@ -8,6 +8,8 @@ on:
       - 'packages/opencode/src/tool/desktop.ts'
       - 'packages/opencode/src/tool/browser.ts'
       - 'packages/opencode/script/desktop-os-check.ts'
+      - 'packages/tui/src/clipboard*.ts'
+      - 'packages/tui/script/clipboard-check.ts'
       - '.github/workflows/olivecode-desktop-os.yml'
   workflow_dispatch:
 
@@ -48,6 +50,10 @@ jobs:
         timeout-minutes: 10
         working-directory: packages/opencode
         run: bun script/desktop-os-check.ts notepad
+      - name: Copy and paste through OliveCode's clipboard
+        timeout-minutes: 3
+        working-directory: packages/tui
+        run: bun script/clipboard-check.ts
       - name: Browser control with the installed Chrome/Edge
         working-directory: packages/opencode
         run: bun test test/computer/browser.test.ts --timeout 60000
@@ -83,6 +89,8 @@ jobs:
           sleep 1
           openbox &
           sleep 1
+          clip=0; (cd ../tui && bun script/clipboard-check.ts) || clip=1
           bun script/desktop-os-check.ts mousepad
+          exit $clip
           EOF
           dbus-run-session -- xvfb-run -a -s "-screen 0 1280x900x24" bash "$RUNNER_TEMP/session.sh"

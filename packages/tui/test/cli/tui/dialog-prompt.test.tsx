@@ -23,6 +23,7 @@ async function mountPrompt(input: {
   root: string
   keybinds: Partial<TuiKeybind.Keybinds>
   onConfirm: (value: string) => void
+  clipboard?: { read: () => Promise<{ data: string; mime: string } | undefined> }
 }) {
   const state = path.join(input.root, "state")
   await mkdir(state, { recursive: true })
@@ -36,6 +37,7 @@ async function mountPrompt(input: {
     { TuiConfigProvider },
     { ToastProvider },
     { OpencodeKeymapProvider, registerOpencodeKeymap },
+    { ClipboardProvider },
   ] = await Promise.all([
     import("../../../src/ui/dialog"),
     import("../../../src/ui/dialog-prompt"),
@@ -44,6 +46,7 @@ async function mountPrompt(input: {
     import("../../../src/config"),
     import("../../../src/ui/toast"),
     import("../../../src/keymap"),
+    import("../../../src/context/clipboard"),
   ])
 
   function Harness() {
@@ -70,9 +73,11 @@ async function mountPrompt(input: {
             <KVProvider>
               <ThemeProvider mode="dark">
                 <ToastProvider>
-                  <DialogProvider>
-                    <DialogPrompt title="Rename Session" value="draft" onConfirm={input.onConfirm} />
-                  </DialogProvider>
+                  <ClipboardProvider value={input.clipboard}>
+                    <DialogProvider>
+                      <DialogPrompt title="Rename Session" value="draft" onConfirm={input.onConfirm} />
+                    </DialogProvider>
+                  </ClipboardProvider>
                 </ToastProvider>
               </ThemeProvider>
             </KVProvider>
@@ -141,6 +146,26 @@ test("dialog prompt submit can be rebound separately from input submit", async (
     prompt.app.mockInput.pressKey("y", { ctrl: true })
 
     expect(confirmed).toEqual(["draft"])
+  } finally {
+    await prompt.cleanup()
+  }
+})
+
+test("Ctrl+V pastes the clipboard into a dialog prompt (e.g. an API key)", async () => {
+  await using tmp = await tmpdir()
+  const prompt = await mountPrompt({
+    root: tmp.path,
+    keybinds: {},
+    onConfirm: () => {},
+    clipboard: { read: async () => ({ data: "sk-test-123\n", mime: "text/plain" }) },
+  })
+  try {
+    await wait(() => prompt.app.renderer.currentFocusedEditor instanceof TextareaRenderable)
+    const textarea = prompt.app.renderer.currentFocusedEditor
+    if (!(textarea instanceof TextareaRenderable)) throw new Error("expected focused dialog textarea")
+    prompt.app.mockInput.pressKey("v", { ctrl: true })
+    await wait(() => textarea.plainText.includes("sk-test-123"))
+    expect(textarea.plainText).toBe("draftsk-test-123")
   } finally {
     await prompt.cleanup()
   }

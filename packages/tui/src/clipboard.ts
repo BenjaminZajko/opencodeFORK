@@ -3,7 +3,7 @@ import { readFile, rm } from "node:fs/promises"
 import { platform, release, tmpdir } from "node:os"
 import path from "node:path"
 import { promisify } from "node:util"
-import { writeGtk } from "./clipboard-linux"
+import { readGtk, writeGtk } from "./clipboard-linux"
 
 const exec = promisify(execFile)
 
@@ -68,6 +68,10 @@ export async function read() {
       Buffer.alloc(0),
     )
     if (image.length) return { data: image.toString().trim(), mime: "image/png" }
+    if (platform() === "win32") {
+      const text = await command("powershell.exe", ["-NonInteractive", "-NoProfile", "-STA", "-Command", "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; Get-Clipboard -Raw"]).catch(() => Buffer.alloc(0))
+      if (text.length) return { data: text.toString("utf8").replace(/\r?\n$/, ""), mime: "text/plain" }
+    }
   }
 
   if (platform() === "linux") {
@@ -77,6 +81,19 @@ export async function read() {
       Buffer.alloc(0),
     )
     if (x11.length) return { data: x11.toString("base64"), mime: "image/png" }
+    // Text: native tools first, then the desktop's GTK clipboard (present on a
+    // fresh Ubuntu, where xclip/wl-clipboard are usually not installed).
+    const tools: [string, string[]][] = [
+      ...(process.env.WAYLAND_DISPLAY ? [["wl-paste", ["--no-newline"]] as [string, string[]]] : []),
+      ["xclip", ["-selection", "clipboard", "-o"]],
+      ["xsel", ["--clipboard", "--output"]],
+    ]
+    for (const [binary, args] of tools) {
+      const text = await command(binary, args).catch(() => Buffer.alloc(0))
+      if (text.length) return { data: text.toString("utf8"), mime: "text/plain" }
+    }
+    const desktop = await readGtk().catch(() => undefined)
+    if (desktop?.data) return desktop
   }
 
   const { default: clipboardy } = await import("clipboardy")
