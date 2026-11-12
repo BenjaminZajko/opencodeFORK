@@ -337,7 +337,12 @@ function Perform($request) {
         $script:sent=$true; $pattern.SetValue($request.text)
       } else {
         if ($element.Current.ControlType -notin @([System.Windows.Automation.ControlType]::Edit,[System.Windows.Automation.ControlType]::Document,[System.Windows.Automation.ControlType]::ComboBox) -and $element.Current.ClassName -notmatch '^(Edit|RichEdit\w*|RICHEDIT\w*)$') { throw 'Choose an editable text control.' }
-        $element.SetFocus()
+        # Some classic text controls refuse programmatic focus; click into them like a person would.
+        try { $element.SetFocus() } catch {
+          $b=$element.Current.BoundingRectangle
+          MoveTo $request ($b.X+[Math]::Min(20,$b.Width/2)) ($b.Y+[Math]::Min(20,$b.Height/2))
+          Check $request; [OliveInput]::Click($false,1)
+        }
         $focused=$false
         for ($i=0;$i -lt 20;$i++) {
           Check $request; [OliveInput]::CheckStop()
@@ -374,7 +379,7 @@ function Perform($request) {
     $codes=@()
     foreach ($modifier in $request.modifiers) { if (!$modifiers.ContainsKey($modifier)) { throw 'Unsupported modifier.' };$codes+=$modifiers[$modifier] }
     if (!$keys.ContainsKey([string]$request.key)) { throw 'Unsupported key.' }
-    SafeFocus; $script:sent=$true;[OliveInput]::Shortcut($keys[$request.key],[ushort[]]$codes)
+    SafeFocus; $script:sent=$true;[OliveInput]::Shortcut($keys[$request.key],[uint16[]]$codes)
   } elseif ($action -eq 'scroll') {
     if ($request.direction -notin @('up','down')) { throw 'Choose up or down.' }
     MoveTo $request ($script:box.X+$script:box.Width/2) ($script:box.Y+$script:box.Height/2)

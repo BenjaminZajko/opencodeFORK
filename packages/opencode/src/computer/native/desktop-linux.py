@@ -194,8 +194,10 @@ class Desktop:
     def verified_point(self, x, y):
         if not self.inside(x, y):
             raise ValueError("Pointer must remain inside the observed window.")
-        hit = atspi.Registry.getDesktop(0).queryComponent().getAccessibleAtPoint(int(x), int(y), atspi.DESKTOP_COORDS)
-        if hit is None or hit.getApplication() != self.app:
+        # The observed window is the active one (checked before acting); confirm the
+        # point belongs to it. Compare process IDs: AT-SPI returns fresh proxies.
+        hit = self.window.queryComponent().getAccessibleAtPoint(int(x), int(y), atspi.DESKTOP_COORDS)
+        if hit is None or hit.getApplication().get_process_id() != self.app.get_process_id():
             raise ValueError("The target is covered or cannot be verified. No input sent.")
 
     def physical(self, request, *args):
@@ -369,12 +371,7 @@ class Desktop:
                     if not all(type(v) in (int, float) and math.isfinite(v) for v in (x, y)):
                         raise ValueError("Choose finite window-relative coordinates.")
                     x += self.box[0]; y += self.box[1]
-                if not self.inside(x, y):
-                    raise ValueError("Pointer must remain inside the observed window.")
-                # Verify hit application to reject occluded points.
-                hit = atspi.Registry.getDesktop(0).queryComponent().getAccessibleAtPoint(int(x), int(y), atspi.DESKTOP_COORDS)
-                if hit is None or hit.getApplication() != self.app:
-                    raise ValueError("The target is covered or cannot be verified. No input sent.")
+                self.verified_point(x, y)
                 self.physical(request, "mousemove", "--sync", str(int(x)), str(int(y)))
                 if action == "click":
                     button, count = request.get("button", "left"), request.get("count", 1)
