@@ -10,11 +10,16 @@ on:
       - 'packages/core/**'
       - '.github/workflows/olivecode-desktop-preview.yml'
 
+concurrency:
+  group: olivecode-desktop-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
 jobs:
   desktop:
+    timeout-minutes: 25
     strategy:
       fail-fast: false
       matrix:

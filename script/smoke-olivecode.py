@@ -18,6 +18,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 calls = []
 coordination = []
 tool_sent = []
+desktop_sent = []
 
 
 class ModelServer(BaseHTTPRequestHandler):
@@ -48,12 +49,19 @@ class ModelServer(BaseHTTPRequestHandler):
         else:
             coordination.append(("lead", body["model"]))
             content = "OliveCode prompt verified"
-        if "Inspect five project files" in prompt and body["model"] == "cohere/north-mini-code:free" and body.get("tools") and not tool_sent:
-            tool_sent.append(True)
-            tool_calls = [{
-                "index": index, "id": f"call_read_{index}", "type": "function",
-                "function": {"name": "read", "arguments": json.dumps({"filePath": f"file_{index}.txt"})},
-            } for index in range(5)]
+        read_request = "Inspect five project files" in prompt and not tool_sent
+        desktop_request = "Check native desktop adapter status only" in prompt and not desktop_sent
+        if (read_request or desktop_request) and body["model"] == "cohere/north-mini-code:free" and body.get("tools"):
+            if desktop_request:
+                desktop_sent.append(True)
+                tool_calls = [{"index": 0, "id": "call_desktop_status", "type": "function",
+                               "function": {"name": "desktop", "arguments": json.dumps({"action": "status"})}}]
+            else:
+                tool_sent.append(True)
+                tool_calls = [{
+                    "index": index, "id": f"call_read_{index}", "type": "function",
+                    "function": {"name": "read", "arguments": json.dumps({"filePath": f"file_{index}.txt"})},
+                } for index in range(5)]
             payload = {
                 "id": "mock-tools", "object": "chat.completion.chunk", "created": 1, "model": body["model"],
                 "choices": [{"index": 0, "delta": {"role": "assistant", "tool_calls": tool_calls}, "finish_reason": None}],
@@ -211,6 +219,19 @@ try:
             })
             assert not any(item[0] in ("planning", "second opinion", "progress", "review") for item in coordination), coordination
             print("Assistance: project switches disabled both extra workflows without interrupting chat", flush=True)
+
+            session = request("/session", {})
+            request(f"/session/{session['id']}/message", {
+                "model": {"providerID": "openrouter", "modelID": models["openrouter"]},
+                "parts": [{"type": "text", "text": "Check native desktop adapter status only. Do not open apps or request permissions."}],
+            })
+            history = request(f"/session/{session['id']}/message")
+            desktop = [part for message in history for part in message["parts"] if part.get("tool") == "desktop"]
+            assert len(desktop) == 1 and desktop[0]["state"]["status"] == "completed", desktop
+            status = json.loads(desktop[0]["state"]["output"])
+            assert status.get("platform") in ("macOS", "Windows", "Linux"), status
+            assert isinstance(status.get("capabilities"), dict), status
+            print(f"Native desktop adapter: {status['platform']} status from packaged tool (no app control or permission changes)", flush=True)
 
             session = request("/session", {})
             try:
