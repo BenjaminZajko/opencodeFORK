@@ -13,14 +13,7 @@ const config: Configuration = {
   artifactName: "olivecode-desktop-${os}-${arch}.${ext}",
   directories: { output: "dist", buildResources: "resources" },
   files: ["out/**/*", "!out/**/*.map"],
-  extraResources: [
-    { from: "resources/icons", to: "icons" },
-    {
-      from: "native",
-      to: "native",
-      filter: ["index.js", "index.d.ts", "build/Release/mac_window.node", "swift-build/**"],
-    },
-  ],
+  extraResources: [{ from: "resources/icons", to: "icons" }],
   protocols: { name: "OliveCode", schemes: ["olivecode"] },
   publish: null,
   mac: {

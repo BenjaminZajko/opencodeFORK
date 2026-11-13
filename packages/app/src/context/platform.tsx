@@ -71,6 +71,10 @@ type PlatformBase = {
   /** Stable platform window identity for window-scoped persistence */
   windowID?: string
 
+  usageMeasurement?: { get(): Promise<boolean>; set(enabled: boolean): Promise<boolean> }
+
+  launchRemote?(request: import("../remote").RemoteLaunch): Promise<import("../remote").RemoteLaunchResult>
+
   /** Application-global desktop updater */
   updater?: UpdaterPlatform
 

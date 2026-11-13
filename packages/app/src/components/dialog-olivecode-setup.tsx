@@ -1,4 +1,4 @@
-import { For, Match, onCleanup, Show, Switch } from "solid-js"
+import { createResource, For, Match, onCleanup, Show, Switch } from "solid-js"
 import { createStore } from "solid-js/store"
 import { Button } from "@opencode-ai/ui/button"
 import { Dialog } from "@opencode-ai/ui/dialog"
@@ -31,11 +31,60 @@ export function DialogOliveCodeSetup(props: { server?: ServerConnection.Any } = 
     busy: "",
     error: "",
     progress: "",
+    removing: "",
     name: "",
     checked: false,
     running: false,
     models: [] as { id: string; sizeGb: number; parameters?: string; quantization?: string; cloud: boolean }[],
   })
+
+  const [recommendation] = createResource(
+    () => state.page === "local",
+    async (load) => {
+      if (!load || (await sdk().protocol) !== "v1") return
+      const result = await sdk().client.onboarding.recommendation(undefined, { signal: abort.signal })
+      if (!result.data) throw new Error(language.t("olivecode.local.recommendation.error"))
+      return result.data
+    },
+  )
+
+  async function remove(model: string) {
+    if (state.busy) return
+    if (sync().data.config.model === `ollama/${model}`) {
+      setState("error", language.t("olivecode.local.remove.active"))
+      return
+    }
+    setState({ busy: "remove", error: "" })
+    try {
+      const result = await sdk().client.onboarding.deleteModel({ model }, { signal: abort.signal })
+      if (result.error || result.data !== true) throw new Error(language.t("olivecode.local.remove.failed"))
+      setState("removing", "")
+      await inventory()
+    } catch {
+      if (!abort.signal.aborted) setState("error", language.t("olivecode.local.remove.failed"))
+    } finally {
+      if (!abort.signal.aborted) setState("busy", "")
+    }
+  }
+
+  async function freeCloud() {
+    if (state.busy) return
+    setState({ busy: "cloud", error: "" })
+    try {
+      if ((await sdk().protocol) !== "v1") throw new Error(language.t("olivecode.local.unavailable"))
+      const connected = sync().data.provider.connected
+      const result = await sdk().client.onboarding.default({ connected }, { signal: abort.signal })
+      if (!result.data) throw new Error(language.t("olivecode.cloud.none"))
+      await sync().updateConfig({ model: `${result.data.providerID}/${result.data.modelID}` })
+      if (abort.signal.aborted) return
+      showToast({ variant: "success", title: language.t("olivecode.cloud.ready", { model: result.data.modelID }) })
+      dialog.close()
+    } catch (error) {
+      if (!abort.signal.aborted) setState("error", error instanceof Error ? error.message : String(error))
+    } finally {
+      if (!abort.signal.aborted) setState("busy", "")
+    }
+  }
 
   async function inventory() {
     setState({ busy: "inventory", error: "" })
@@ -165,6 +214,12 @@ export function DialogOliveCodeSetup(props: { server?: ServerConnection.Any } = 
                 <span>{language.t("olivecode.setup.cloud.description")}</span>
               </button>
             </div>
+            <div class="olive-cloud-quickstart">
+              <Button variant="secondary" disabled={!!state.busy} onClick={() => void freeCloud()}>
+                {language.t("olivecode.cloud.chooseFree")}
+              </Button>
+              <p class="olive-copy olive-small">{language.t("olivecode.cloud.freeDescription")}</p>
+            </div>
             <p class="olive-copy olive-small">{language.t("olivecode.local.custom")}</p>
             <Button variant="ghost" onClick={() => dialog.close()}>
               {language.t("olivecode.setup.skip")}
@@ -177,6 +232,37 @@ export function DialogOliveCodeSetup(props: { server?: ServerConnection.Any } = 
                 {language.t("olivecode.local.refresh")}
               </Button>
             </div>
+            <Show when={!recommendation.error && recommendation()?.primaryLocal} keyed>
+              {(pick) => (
+                <section class="olive-hardware" aria-label={language.t("olivecode.local.recommendation")}>
+                  <span class="olive-eyebrow">{language.t("olivecode.local.recommendation")}</span>
+                  <strong>{pick.name ?? pick.id}</strong>
+                  <p class="olive-copy">{language.t("olivecode.local.recommendation.description")}</p>
+                  <p class="olive-copy olive-small">
+                    {[
+                      recommendation()?.profile.cpu,
+                      recommendation()?.profile.ramGb ? `${recommendation()?.profile.ramGb} GB RAM` : undefined,
+                      pick.downloadGb ? `${pick.downloadGb} GB` : undefined,
+                    ]
+                      .filter(Boolean)
+                      .join(" · ")}
+                  </p>
+                  <Button
+                    size="small"
+                    variant="secondary"
+                    disabled={!!state.busy}
+                    onClick={() => setState("name", pick.id)}
+                  >
+                    {language.t("olivecode.local.recommendation.use")}
+                  </Button>
+                </section>
+              )}
+            </Show>
+            <Show when={recommendation.error}>
+              <p class="olive-copy" role="status">
+                {language.t("olivecode.local.recommendation.error")}
+              </p>
+            </Show>
             <Show when={state.checked && !state.running}>
               <div class="olive-notice">
                 <p>{language.t("olivecode.local.missing")}</p>
@@ -198,18 +284,41 @@ export function DialogOliveCodeSetup(props: { server?: ServerConnection.Any } = 
                         {[model.parameters, model.quantization, `${model.sizeGb} GB`].filter(Boolean).join(" · ")}
                       </span>
                     </div>
-                    <Button
-                      size="small"
-                      variant="secondary"
-                      disabled={!!state.busy}
-                      onClick={() => void select(model.id)}
-                    >
-                      {language.t(state.busy === model.id ? "olivecode.local.inspect" : "olivecode.local.use")}
-                    </Button>
+                    <div class="olive-model-actions">
+                      <Button
+                        size="small"
+                        variant="ghost"
+                        disabled={!!state.busy}
+                        onClick={() => setState("removing", model.id)}
+                      >
+                        {language.t("olivecode.local.remove")}
+                      </Button>
+                      <Button
+                        size="small"
+                        variant="secondary"
+                        disabled={!!state.busy}
+                        onClick={() => void select(model.id)}
+                      >
+                        {language.t(state.busy === model.id ? "olivecode.local.inspect" : "olivecode.local.use")}
+                      </Button>
+                    </div>
                   </div>
                 )}
               </For>
             </div>
+            <Show when={state.removing}>
+              <div class="olive-notice" role="group" aria-label={language.t("olivecode.local.remove.confirmAction")}>
+                <p>{language.t("olivecode.local.remove.confirm", { model: state.removing })}</p>
+                <div class="olive-model-actions">
+                  <Button variant="secondary" disabled={!!state.busy} onClick={() => void remove(state.removing)}>
+                    {language.t("olivecode.local.remove.confirmAction")}
+                  </Button>
+                  <Button variant="ghost" disabled={!!state.busy} onClick={() => setState("removing", "")}>
+                    {language.t("olivecode.local.remove.cancel")}
+                  </Button>
+                </div>
+              </div>
+            </Show>
             <form onSubmit={download} class="olive-download">
               <TextField
                 label={language.t("olivecode.local.model")}

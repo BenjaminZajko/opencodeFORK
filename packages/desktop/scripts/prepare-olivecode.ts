@@ -1,10 +1,15 @@
 import { $ } from "bun"
+import pkg from "../package.json"
 import { copyFile, mkdir, mkdtemp, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 
 // Bundle the fork's engine. Never substitute an upstream executable.
-await $`bun ../opencode/script/build-node.ts`
+await $`bun ../opencode/script/build-node.ts`.env({
+  ...process.env,
+  OPENCODE_VERSION: pkg.version,
+  OPENCODE_CHANNEL: "olivecode",
+})
 await mkdir("resources/icons", { recursive: true })
 for (const name of ["icon.png", "dock.png"]) {
   await copyFile("../../site/assets/icon-512.png", `resources/icons/${name}`)

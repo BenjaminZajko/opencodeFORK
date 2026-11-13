@@ -25,12 +25,21 @@ import { createUpdaterSubscriptions } from "./updater-subscriptions"
 import { createDesktopDraftStore } from "./draft-store"
 import { nativeT } from "./native-translations"
 
+import { createDesktopUsage } from "./usage"
+import { launchRemote } from "./remote-launch"
+
 const pickerFilters = (ext?: string[]) => {
   if (!ext || ext.length === 0) return undefined
   return [{ name: nativeT("desktop.dialog.files"), extensions: ext }]
 }
 
 const pickedFiles = createPickedFileAuthorizations()
+
+function assertDesktopSender(event: IpcMainInvokeEvent) {
+  const win = BrowserWindow.fromWebContents(event.sender)
+  if (!win || win.isDestroyed() || event.senderFrame !== event.sender.mainFrame)
+    throw new Error("Invalid desktop sender")
+}
 
 type Deps = {
   killSidecar: () => Promise<void> | void
@@ -55,6 +64,15 @@ type Deps = {
 }
 
 export function registerIpcHandlers(deps: Deps) {
+  const usage = createDesktopUsage()
+  ipcMain.handle("olivecode-usage-get", (event) => {
+    assertDesktopSender(event)
+    return usage.get()
+  })
+  ipcMain.handle("olivecode-usage-set", (event, enabled) => {
+    assertDesktopSender(event)
+    return usage.set(enabled)
+  })
   const drafts = createDesktopDraftStore(join(app.getPath("userData"), "drafts.sqlite"))
   const updaterSubscriptions = createUpdaterSubscriptions()
   app.once("will-quit", updaterSubscriptions.clear)
@@ -62,6 +80,10 @@ export function registerIpcHandlers(deps: Deps) {
   app.once("will-quit", () => drafts.close())
   app.on("browser-window-created", (_event, win) => win.on("session-end", () => drafts.flush()))
 
+  ipcMain.handle("olivecode-remote-launch", (event, request) => {
+    assertDesktopSender(event)
+    return launchRemote(request)
+  })
   ipcMain.handle("kill-sidecar", () => deps.killSidecar())
   ipcMain.handle("await-initialization", () => deps.awaitInitialization())
   ipcMain.handle("consume-initial-deep-links", () => deps.consumeInitialDeepLinks())

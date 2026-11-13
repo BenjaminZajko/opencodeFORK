@@ -116,7 +116,7 @@ try:
         })
         output = queue.Queue()
         lines = []
-        process = subprocess.Popen([binary, "--pure", "--print-logs", "serve", "--hostname", "127.0.0.1", "--port", "0"],
+        process = subprocess.Popen([*(["node", binary] if binary.endswith(".mjs") else [binary]), "--pure", "--print-logs", "serve", "--hostname", "127.0.0.1", "--port", "0"],
                                    cwd=folder, env=env, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
 
         def drain():

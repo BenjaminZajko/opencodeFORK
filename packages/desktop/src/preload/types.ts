@@ -43,6 +43,10 @@ export type FatalRendererError = {
 }
 
 export type ElectronAPI = {
+  usageMeasurement: { get(): Promise<boolean>; set(enabled: boolean): Promise<boolean> }
+  launchRemote: (
+    request: import("../../../app/src/remote").RemoteLaunch,
+  ) => Promise<import("../../../app/src/remote").RemoteLaunchResult>
   killSidecar: () => Promise<void>
   installCli: () => Promise<string>
   awaitInitialization: () => Promise<ServerReadyData>
