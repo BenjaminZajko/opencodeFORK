@@ -29,9 +29,17 @@ const file = (await readdir(chunks)).find((name) => /^node-.*\.js$/.test(name))
 assert.ok(file, "Build the desktop engine first")
 const { Server } = await import(pathToFileURL(join(chunks, file)).href)
 let server
+let stage = "starting engine"
+const watchdog = setTimeout(() => {
+  console.error(`Desktop engine check stalled: ${stage}`)
+  process.exit(1)
+}, 90_000)
+watchdog.unref()
 try {
   server = await Server.listen({ hostname: "127.0.0.1", port: 0, username: "opencode", password: "smoke-only" })
   const request = async (path, init = {}) => {
+    stage = `${init.method ?? "GET"} ${path}`
+    console.log(`Checking ${stage}`)
     const url = new URL(path, server.url)
     url.searchParams.set("directory", directory)
     const response = await fetch(url, {
@@ -67,7 +75,16 @@ try {
   console.log(
     "PASS: authenticated Node engine, project settings persistence, native PTY, hardware recommendations, Ollama inventory",
   )
+} catch (error) {
+  console.error(`Desktop engine check failed at ${stage}`, error)
+  throw error
 } finally {
+  stage = "stopping engine"
   await server?.stop(true)
+  stage = "removing disposable state"
   await rm(root, { recursive: true, force: true })
 }
+clearTimeout(watchdog)
+// Electron's utility process exits after its server stops. Match that lifecycle
+// here rather than keeping a test alive for process-global native worker handles.
+process.exit(0)
