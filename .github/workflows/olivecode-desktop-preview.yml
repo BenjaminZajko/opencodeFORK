@@ -59,11 +59,14 @@ jobs:
       - name: Verify chat, tool execution and teamwork without paid APIs
         run: python script/smoke-olivecode.py packages/desktop/scripts/serve-engine.mjs
       - name: Package native preview (unsigned, no update feed)
-        run: bun run package:${{ matrix.target }} --dir
+        run: bun run package:${{ matrix.target }}
         working-directory: packages/desktop
       - uses: actions/upload-artifact@v4
         with:
           name: OliveCode-desktop-${{ matrix.target }}
-          path: packages/desktop/dist/**
+          path: |
+            packages/desktop/dist/*.zip
+            packages/desktop/dist/*.exe
+            packages/desktop/dist/*.AppImage
           retention-days: 1
           if-no-files-found: error

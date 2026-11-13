@@ -25,7 +25,7 @@ const config: Configuration = {
     icon: "resources/icons/icon.icns",
     identity: null,
     notarize: false,
-    target: ["dir"],
+    target: ["zip"],
   },
   win: { target: ["nsis"] },
   linux: { category: "Development", icon: "resources/icons", target: ["AppImage"] },
