@@ -1,26 +1,24 @@
 import type { Configuration } from "electron-builder"
 import { createRequire } from "node:module"
+import { existsSync } from "node:fs"
 import { dirname, join } from "node:path"
 
 const require = createRequire(import.meta.url)
+const electronDist = join(dirname(require.resolve("electron/package.json")), "dist")
 
 // Local previews deliberately have no upstream update feed or bundled upstream CLI.
 // Public distribution needs OliveCode signing and notarization configuration.
 const config: Configuration = {
   appId: "dev.olivecode.desktop.workspace",
   productName: "OliveCode Preview",
-  electronDist: join(dirname(require.resolve("electron/package.json")), "dist"),
+  extraMetadata: { desktopName: "dev.olivecode.desktop.workspace.desktop" },
+  // Fresh Bun installs may skip Electron’s binary download. In that case,
+  // let electron-builder fetch the official binary for the target platform.
+  electronDist: existsSync(electronDist) ? electronDist : undefined,
   artifactName: "olivecode-desktop-${os}-${arch}.${ext}",
   directories: { output: "dist", buildResources: "resources" },
   files: ["out/**/*", "!out/**/*.map"],
-  extraResources: [
-    { from: "resources/icons", to: "icons" },
-    {
-      from: "native",
-      to: "native",
-      filter: ["index.js", "index.d.ts", "build/Release/mac_window.node", "swift-build/**"],
-    },
-  ],
+  extraResources: [{ from: "resources/icons", to: "icons" }],
   protocols: { name: "OliveCode", schemes: ["olivecode"] },
   publish: null,
   mac: {
@@ -28,10 +26,16 @@ const config: Configuration = {
     icon: "resources/icons/icon.icns",
     identity: null,
     notarize: false,
-    target: ["dir"],
+    target: ["zip"],
   },
-  win: { target: ["nsis"] },
-  linux: { category: "Development", icon: "resources/icons", target: ["AppImage"] },
+  win: { icon: "resources/icons/icon.png", target: ["nsis"] },
+  linux: {
+    executableName: "dev.olivecode.desktop.workspace",
+    syncDesktopName: true,
+    category: "Development",
+    icon: "resources/icons",
+    target: ["AppImage"],
+  },
 }
 
 export default config

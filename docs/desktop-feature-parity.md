@@ -1,24 +1,63 @@
-# Desktop and terminal feature audit
+# OliveCode desktop and terminal 0.1.7
 
-Source audit on 2026-11-04. Shared engine code does not establish identical UI coverage or end-to-end verification of every tool.
+Updated 2026-11-13. Desktop package: **0.1.7-preview.1**. Published terminal
+reference: **v0.1.7** (verified on GitHub). The desktop bundles this fork’s engine;
+it does not substitute an upstream OpenCode executable.
 
-| Capability | Desktop state | Evidence / limit |
+## Implemented and checked
+
+| Area | Desktop behavior | Verification |
 | --- | --- | --- |
-| Coding tools, permission checks, project configuration | Shared OliveCode engine | Desktop preparation bundles this checkout's engine; same tool/session/configuration implementation. Model quality and OS permissions still matter. |
-| Local and cloud models | Exposed | `dialog-olivecode-setup.tsx` supports provider setup, installed Ollama inventory, tool-capability checks and explicit downloads, including compatible GGUF names. It does not reproduce the terminal's complete model management. |
-| Hardware recommendations, local model deletion | Desktop setup gap | Terminal `dialog-local.tsx` offers hardware/recommendation and removal flows. Desktop setup currently offers inventory, selection and download. |
-| Free cloud recommendations, cooldown/retry library | Desktop presentation gap | Terminal `dialog-cloud.tsx` has a dedicated free-only catalogue and retry schedule. Desktop uses provider/model selection; the same curated screen has not been ported. |
-| Agents, Plan/Build, custom instructions | Exposed | Local agent state and composer controls use existing agent/configuration APIs. Custom agents remain selectable through existing agent commands. |
-| Teamwork / Follow-through | Exposed | Desktop tools and terminal `dialog-assist.tsx` write the same project `collaboration.teamwork` and `followThrough` options. Extra requests use connected free-account quotas. |
-| Skills / custom commands / context / attachments | Exposed | Tools lists actual installed skills; composer provides command, context, shell and attachment actions through the shared SDK. |
-| Session history, archive, fork, compact, export, undo/redo, share | Implemented UI/actions | Desktop `use-session-commands.tsx`; permission/configuration and availability conditions still apply. Source-verified coverage, not a claim every action was exercised in this pass. |
-| Git review, file browser, worktrees, terminal | Implemented UI | Existing session review, workspace selector and terminal panel retained. Desktop adds an integrated visual review surface. |
-| MCP and language-server status | Implemented UI | Directory status popover and composer MCP resources; no full new MCP configuration wizard claimed. |
-| Computer-control setup and stop/status screen | Dedicated desktop setup gap | Terminal `dialog-computer.tsx` provides visible/background browser and Mac modes, setup checks and stop handling. Engine support alone is not equivalent desktop UX. |
-| Phone / Telegram remote setup | Dedicated desktop setup gap | Terminal `dialog-remote.tsx` guides remote setup/start. No equivalent desktop setup flow has been implemented. |
-| Privacy / usage and sponsor measurement preferences | Desktop parity gap | Terminal `dialog-privacy.tsx` exposes these preferences. Desktop does not currently mirror that panel; terminal preferences must not be assumed shared with desktop. |
-| Update / release readiness | Preview limitation | Desktop automatic updates are disabled; signing, notarization, Intel/other-platform validation and update metadata remain release work. |
+| Coding, file tools, streamed chat | Shared engine, normal conversations and project permissions | Actual bundled Node engine exercised with local OpenRouter, Groq, Mistral and Ollama mock endpoints; five file reads completed |
+| Teamwork and follow-through | Project switches, shared planning, adviser/progress checks, completion reviews and continuation | Bundled-engine acceptance test verified advice and follow-through; turning both switches off disabled the extra workflows |
+| Model handoffs, quota recovery and free-provider policy | Current shared engine implementation | Source shared with terminal; general model/Assist acceptance passed; every handoff/failure scenario has not been repeated in Electron |
+| Free cloud selection | Models → Choose a connected free model uses the terminal ranking and cooldown endpoint | Compiles; same server endpoint; provider accounts are never created or charged automatically |
+| Local models | Ollama inventory, capability checks, explicit download with progress, hardware recommendation, selection, removal confirmation | Real hardware/inventory endpoints passed under Node. Packaged app and browser UI inspected. Recommendation selection and removal cancellation checked; no real model deleted or downloaded during QA |
+| Computer use in normal chat | Tools & skills → Computer: computer access and browser visibility, same project config as terminal | Settings round-trip and merge preservation passed under Node. Browser UI toggle persisted |
+| Native adapters | Mac Swift helper, Windows PowerShell and Linux Python adapters embedded in desktop engine | Fixed missing assets in Node build; Mac helper compiles and packaged chat/tool status reports macOS capabilities without app actions. Existing terminal OS checks do not establish desktop GUI acceptance |
+| Phone control | Tools & skills → Phone control: channel, mode, setup/start/status, private native-terminal launch | IPC/types and argument-injection tests passed. Packaged Mac controls inspected. Uses installed OliveCode CLI, with explicit missing-CLI result; not a background service managed entirely inside the desktop window |
+| Privacy | Desktop-only daily usage opt-in, off by default, separate from terminal preferences | Packaged Mac app showed off. Shared reporter tests verify no request before opt-in, daily deduplication, token rotation and retry behavior. No live measurement enabled during QA |
+| Skills | Project discovery, details and start a skill conversation | Existing shared endpoint and UI retained; load errors no longer read a rejected resource |
+| Sessions, attachments, commands, git review, worktrees, terminal, MCP and LSP | Existing desktop workspace and shared engine | Existing source paths retained. Not every command has been manually repeated in this pass |
+| Design | Restrained forest-green surfaces, compact feature navigation, semantic theme colors, clear loading/errors, responsive rows | Browser inspected at narrow and laptop widths. Fixed sidebar appearing above dialogs. Native packaged Mac app launched with disposable state |
 
-## Recommendation
+## Release gates and remaining differences
 
-Keep the main coding screen focused. Port missing device/remote setup and privacy controls as deliberate settings flows, then validate each with the actual backend and operating-system permission lifecycle. Model management should include the terminal's free-model guidance and explicit hardware checks without automatic downloads. Do not describe this preview as full terminal parity until those workflows are implemented and verified.
+- **Not a claim of complete parity.** Separate-Mac/VM provisioning remains in the
+  terminal’s advanced setup; a configured separate-Mac agent is provided by the
+  shared engine. Phone setup still uses a separate native terminal and an installed
+  OliveCode CLI. On Windows/Linux, terminal Remote currently supports project files
+  and background browser; visible/isolated Mac modes are only offered on macOS.
+- Desktop updates remain disabled. There is no verified signed desktop update
+  feed. Never point Electron at the terminal release feed or inherited upstream
+  feed. Signing/notarization and a desktop release/update channel are still release
+  work, not implemented by a toggle.
+- Sponsor acknowledgement preferences do not appear in desktop because this
+  desktop has no sponsor placement. Usage opt-in is a separate desktop preference.
+- Windows/Linux full desktop GUI interaction still needs platform-specific
+  acceptance beyond the shared terminal checks. Native builds and packaged engine
+  acceptance run on each operating system. Added `.github/workflows/olivecode-desktop-preview.yml`
+  builds on macOS/Windows/Linux, exercises the actual Node bundle, runs shared
+  chat/tools/Assist acceptance with local mock models, and packages unsigned
+  previews. A workflow file alone is not a passing run.
+- Linux semantic control requires AT-SPI and distro Python bindings; pointer input
+  needs X11/xdotool. Wayland global input is unavailable. Native Mac control needs
+  macOS 14+. The app does not silently bypass OS permissions.
+
+## Repeatable verification
+
+From `packages/desktop`:
+
+```sh
+bun typecheck
+bun run build
+node scripts/smoke-engine.mjs
+python ../../script/smoke-olivecode.py scripts/serve-engine.mjs
+bun test ./src/main/remote-launch.test.ts ./src/main/updater-controller.test.ts ./src/main/updater-subscriptions.test.ts
+bun run package:preview
+```
+
+The smoke scripts use disposable state and local mock model endpoints. They do
+not use production credentials, real model credits, or modify customer projects.
+Launch an isolated packaged Mac instance using `OPENCODE_TEST_ONBOARDING=1`;
+never restart or overwrite an already-running user instance for QA.

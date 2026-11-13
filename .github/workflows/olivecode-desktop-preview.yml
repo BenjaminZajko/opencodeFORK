@@ -1,0 +1,73 @@
+name: OliveCode desktop preview
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'packages/app/**'
+      - 'packages/desktop/**'
+      - 'packages/opencode/**'
+      - 'packages/core/**'
+      - '.github/workflows/olivecode-desktop-preview.yml'
+
+concurrency:
+  group: olivecode-desktop-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  desktop:
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15-intel
+            target: mac
+          - runner: windows-latest
+            target: win
+          - runner: ubuntu-24.04
+            target: linux
+    runs-on: ${{ matrix.runner }}
+    env:
+      OPENCODE_VERSION: '0.1.7'
+      OPENCODE_CHANNEL: olivecode
+      MODELS_DEV_API_JSON: ${{ github.workspace }}/packages/opencode/test/tool/fixtures/models-api.json
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      NODE_OPTIONS: '--max-old-space-size=6144'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.4.2'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: bun install --frozen-lockfile
+      - run: bun typecheck
+        working-directory: packages/app
+      - run: bun typecheck
+        working-directory: packages/desktop
+      - run: bun test ./src/main/remote-launch.test.ts ./src/main/preview-packaging.test.ts
+        working-directory: packages/desktop
+      - run: bun run build
+        working-directory: packages/desktop
+      - name: Exercise actual bundled Node engine
+        run: node scripts/smoke-engine.mjs
+        working-directory: packages/desktop
+      - name: Verify chat, tool execution and teamwork without paid APIs
+        run: python script/smoke-olivecode.py packages/desktop/scripts/serve-engine.mjs
+      - name: Package native preview (unsigned, no update feed)
+        run: bun run package:${{ matrix.target }}
+        working-directory: packages/desktop
+      - uses: actions/upload-artifact@v4
+        with:
+          name: OliveCode-desktop-${{ matrix.target }}
+          path: |
+            packages/desktop/dist/*.zip
+            packages/desktop/dist/*.exe
+            packages/desktop/dist/*.AppImage
+          retention-days: 1
+          if-no-files-found: error

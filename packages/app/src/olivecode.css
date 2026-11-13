@@ -712,14 +712,14 @@
     bottom: 0;
     left: 0;
     width: 270px;
-    z-index: 61;
+    z-index: 41;
     background: var(--v2-background-bg-deep);
     border-right: 1px solid var(--v2-border-border-muted);
   }
   .olive-sidebar-scrim {
     position: absolute;
     inset: 36px 0 0;
-    z-index: 60;
+    z-index: 40;
     background: #00000055;
   }
   .olive-workspace-content {
@@ -753,4 +753,124 @@
   .olive-sidebar-project-heading > * {
     opacity: 1 !important;
   }
+}
+
+/* Shared semantic colors keep these surfaces legible in both themes. */
+.olive-hardware {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 18px 0;
+  border-block: 1px solid var(--v2-border-border-muted);
+}
+.olive-hardware > strong {
+  font-size: 18px;
+  font-weight: 550;
+  color: var(--v2-text-text-base);
+}
+.olive-eyebrow {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--v2-text-text-muted);
+  letter-spacing: 0.04em;
+}
+.olive-model-row > .olive-model-actions,
+.olive-model-actions {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.olive-tools-tabs {
+  overflow-x: auto;
+}
+.olive-tools-tabs button {
+  white-space: nowrap;
+}
+@media (max-width: 540px) {
+  .olive-model-row {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+  .olive-model-actions {
+    justify-content: flex-start;
+  }
+  .olive-tools-body {
+    padding-inline: 18px;
+  }
+}
+
+.olive-remote {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+.olive-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--v2-text-text-base);
+}
+.olive-field select {
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--v2-border-border-muted);
+  background: var(--v2-background-bg-base);
+  color: var(--v2-text-text-base);
+  min-height: 40px;
+}
+.olive-remote-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.olive-tools-body select:focus-visible {
+  outline: 2px solid var(--v2-icon-icon-accent);
+  outline-offset: 2px;
+}
+
+.olive-cloud-quickstart {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+  padding-top: 16px;
+  border-top: 1px solid var(--v2-border-border-muted);
+}
+
+/* The settings stylesheet also targets shared switches when loaded lazily.
+   Keep OliveCode's controls consistent regardless of which dialog opened first. */
+.olive-tools-body .olive-assistance-row [data-component="switch"] [data-slot="switch-control"] {
+  box-sizing: border-box;
+  width: 32px;
+  height: 20px;
+  padding: 2px;
+  border: 0;
+  border-radius: 12px;
+}
+.olive-tools-body .olive-assistance-row [data-component="switch"] [data-slot="switch-thumb"] {
+  box-sizing: border-box;
+  width: 16px;
+  height: 16px;
+  border: 0;
+  border-radius: 50%;
+  transform: translateX(0);
+}
+.olive-tools-body .olive-assistance-row [data-component="switch"][data-checked] [data-slot="switch-thumb"] {
+  width: 16px;
+  transform: translateX(12px);
+}
+.olive-tools-body .olive-assistance-row [data-component="switch"][data-checked] [data-slot="switch-control"] {
+  background: var(--v2-icon-icon-accent);
+}
+.olive-tools-body .olive-assistance-row [data-component="switch"]:dir(rtl)[data-checked] [data-slot="switch-thumb"] {
+  transform: translateX(-12px);
+}
+.olive-tools-body .olive-assistance-row [data-slot="switch-input"]:focus-visible ~ [data-slot="switch-control"] {
+  outline: 2px solid var(--v2-icon-icon-accent);
+  outline-offset: 2px;
 }

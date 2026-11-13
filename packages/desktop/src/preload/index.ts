@@ -12,6 +12,11 @@ const updaterHandler = (_: unknown, state: UpdaterState) => {
 
 const api: ElectronAPI = {
   killSidecar: () => ipcRenderer.invoke("kill-sidecar"),
+  usageMeasurement: {
+    get: () => ipcRenderer.invoke("olivecode-usage-get"),
+    set: (enabled) => ipcRenderer.invoke("olivecode-usage-set", enabled),
+  },
+  launchRemote: (request) => ipcRenderer.invoke("olivecode-remote-launch", request),
   installCli: () => ipcRenderer.invoke("install-cli"),
   awaitInitialization: () => ipcRenderer.invoke("await-initialization"),
   wslServers: {

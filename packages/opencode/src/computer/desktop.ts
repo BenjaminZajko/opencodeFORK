@@ -42,7 +42,7 @@ export async function installBundle(app: string, data: Uint8Array) {
   const hash = (value: Uint8Array) => createHash("sha256").update(value).digest("hex")
   const source = hash(data)
   const existing = await readFile(bin).catch(() => undefined)
-  const installed = await Bun.file(receipt).json().catch(() => undefined) as { source: string; binary: string } | undefined
+  const installed = await readFile(receipt, "utf8").then((value) => JSON.parse(value)).catch(() => undefined) as { source: string; binary: string } | undefined
   const valid = await promisify(execFile)("/usr/bin/codesign", ["--verify", "--strict", app]).then(() => true, () => false)
   if (valid && installed?.source === source && existing && installed.binary === hash(existing)) return bin
   await mkdir(path.dirname(bin), { recursive: true })

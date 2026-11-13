@@ -2,6 +2,76 @@ import { DESKTOP_NATIVE_ENGLISH } from "./desktop-native"
 
 export const dict = {
   ...DESKTOP_NATIVE_ENGLISH,
+  "olivecode.computer.title": "Computer",
+  "olivecode.computer.description":
+    "Ask OliveCode to use a website or an installed app directly from your conversation.",
+  "olivecode.computer.enabled": "Computer use",
+  "olivecode.computer.enabled.description":
+    "Make browser and desktop tools available in this project. You still approve actions when required.",
+  "olivecode.computer.browser": "Show the browser",
+  "olivecode.computer.browser.description":
+    "Keep the controlled browser visible. Turn this off to work in the background; OliveCode can show it when you need to sign in.",
+  "olivecode.computer.permissions":
+    "Your system may ask for accessibility or screen access the first time. Stopping the conversation stops its current work.",
+  "olivecode.computer.platforms":
+    "Desktop control supports macOS 14+, Windows and Linux. Linux needs its accessibility services; coordinate actions require X11. Browser control needs Chrome, Edge or Chromium.",
+  "olivecode.local.recommendation": "Matched to this computer",
+  "olivecode.local.recommendation.description":
+    "Based on the hardware of the connected OliveCode engine. Download size and memory needs vary by model.",
+  "olivecode.local.recommendation.use": "Choose for download",
+  "olivecode.local.recommendation.error":
+    "Hardware recommendations are unavailable. You can still choose a model below.",
+  "olivecode.local.remove": "Remove",
+  "olivecode.local.remove.confirm": "Remove {{model}} from this computer? You can download it again later.",
+  "olivecode.local.remove.confirmAction": "Remove model",
+  "olivecode.local.remove.cancel": "Keep model",
+  "olivecode.local.remove.failed": "Could not remove the model. Refresh and try again.",
+  "olivecode.local.remove.active": "Choose another model before removing the current default.",
+  "olivecode.remote.title": "Phone control",
+  "olivecode.remote.description":
+    "Send tasks from your phone. OliveCode works on this computer using its existing Remote connection.",
+  "olivecode.remote.channel": "Messaging service",
+  "olivecode.remote.mode": "What your phone can control",
+  "olivecode.remote.coding": "Project files",
+  "olivecode.remote.browser": "Background browser",
+  "olivecode.remote.visible": "Desktop apps and browser",
+  "olivecode.remote.mac": "Separate Mac or virtual machine",
+  "olivecode.remote.telegram":
+    "Create a bot with Telegram’s verified @BotFather. Setup asks for its token privately in a separate terminal, then pairs your private account. Never put the token in a conversation.",
+  "olivecode.remote.whatsapp":
+    "Advanced: requires your Meta Business app, phone number and a public HTTPS webhook. Meta eligibility and charges may apply.",
+  "olivecode.remote.setup": "Connect account",
+  "olivecode.remote.start": "Start remote",
+  "olivecode.remote.status": "Check connection",
+  "olivecode.remote.opened": "Remote terminal opened. Follow its steps and keep it open while using your phone.",
+  "olivecode.remote.missing":
+    "Install the OliveCode terminal app first, then try again. This preview uses its existing Remote connection.",
+  "olivecode.remote.failed":
+    "Could not open the remote terminal. Check that a supported terminal and OliveCode are installed.",
+  "olivecode.remote.disclosure":
+    "Only your paired account can send tasks. Messages travel through the chosen service. Keep this computer awake; close the remote terminal or press Ctrl+C there to stop. This starts a separate Remote session.",
+  "olivecode.remote.local": "Open the desktop app and connect to its local engine to use phone control.",
+  "olivecode.preferences.saved": "Project preferences saved",
+  "olivecode.preferences.saveError": "Could not save project preferences. Try again.",
+  "olivecode.cloud.chooseFree": "Choose a connected free model",
+  "olivecode.cloud.freeDescription":
+    "Uses the terminal’s free-model ranking and current cooldowns. Connect an account first. Provider limits and data policies still apply.",
+  "olivecode.cloud.none":
+    "No connected free model is available right now. Connect a free provider or try again after its cooldown.",
+  "olivecode.cloud.ready": "Selected {{model}}",
+  "olivecode.privacy.title": "Privacy",
+  "olivecode.privacy.description": "Optional measurement is off by default. OliveCode works without it.",
+  "olivecode.privacy.usage": "Share daily app usage",
+  "olivecode.privacy.usage.description":
+    "Help us count active installations and returning users. You can turn this off anytime.",
+  "olivecode.privacy.payload":
+    "Sends the app version, operating system, day and a token that changes daily to OliveCode’s reporting service. Prompts, project files and API keys are excluded. The service receives your network address with the request.",
+  "olivecode.privacy.separate":
+    "This preference applies to this desktop installation. Terminal preferences are separate. Cloud providers still receive the prompts and context you send them.",
+  "olivecode.privacy.failed": "Could not read or save your privacy preference. Try again.",
+  "olivecode.privacy.desktop": "Usage measurement can be managed in the desktop app.",
+  "olivecode.tools.teamwork.handoffs":
+    "Free models help plan, check progress and hand a stuck task to another available model when useful.",
   "olivecode.name": "OliveCode",
   "olivecode.workspace.navigation": "Projects and conversations",
   "olivecode.workspace.new": "New conversation",
@@ -16,30 +86,39 @@ export const dict = {
   "olivecode.tools.assistance": "Task assistance",
   "olivecode.tools.skills": "Skills",
   "olivecode.tools.chooseProject": "Open a project to change its assistance settings or use a skill.",
-  "olivecode.tools.description": "Bring the terminal’s task assistance into this workspace. Settings are saved for this project.",
+  "olivecode.tools.description":
+    "Bring the terminal’s task assistance into this workspace. Settings are saved for this project.",
   "olivecode.tools.teamwork": "Teamwork",
-  "olivecode.tools.teamwork.description": "Uses free models to compare plans and check progress on larger tasks. Your selected model performs the work.",
+  "olivecode.tools.teamwork.description":
+    "Uses free models to compare plans and check progress on larger tasks. Your selected model performs the work.",
   "olivecode.tools.followThrough": "Follow-through",
   "olivecode.tools.followThrough.description": "Checks the result and continues important unfinished work.",
-  "olivecode.tools.disclosure": "Cloud assistance uses connected free accounts and their quotas. Local work stays on this computer. Reviews can still miss mistakes. Changes apply at the next task step.",
+  "olivecode.tools.disclosure":
+    "Cloud assistance uses connected free accounts and their quotas. Local work stays on this computer. Reviews can still miss mistakes. Changes apply at the next task step.",
   "olivecode.tools.saved": "Project assistance settings saved",
   "olivecode.tools.saveError": "Could not save project assistance. Try again.",
   "olivecode.tools.loadError": "Could not load project tools. Close this panel and try again.",
-  "olivecode.tools.skills.description": "Reusable instructions discovered from your project and installed skill folders.",
-  "olivecode.tools.noSkills": "No skills found for this project. Add a SKILL.md in .agents/skills or .opencode/skills to make it available here.",
+  "olivecode.tools.skills.description":
+    "Reusable instructions discovered from your project and installed skill folders.",
+  "olivecode.tools.noSkills":
+    "No skills found for this project. Add a SKILL.md in .agents/skills or .opencode/skills to make it available here.",
   "olivecode.tools.useSkill": "Use skill",
-  "olivecode.tools.skillPrompt": "Use the {{skill}} skill to help with this project. First explain how it applies, then wait for my task.",
+  "olivecode.tools.skillPrompt":
+    "Use the {{skill}} skill to help with this project. First explain how it applies, then wait for my task.",
   "olivecode.starter.heading": "What would you like to build?",
   "olivecode.starter.description": "Work on your project with a model you choose.",
   "olivecode.starter.explore": "Understand the project",
   "olivecode.starter.explore.description": "Find your way through the codebase",
-  "olivecode.starter.explore.prompt": "Explore this project and explain its structure, how to run it, and the most important files. Do not change files.",
+  "olivecode.starter.explore.prompt":
+    "Explore this project and explain its structure, how to run it, and the most important files. Do not change files.",
   "olivecode.starter.fix": "Fix a bug",
   "olivecode.starter.fix.description": "Trace the cause and verify the repair",
-  "olivecode.starter.fix.prompt": "Help me fix a bug in this project. First ask me what is going wrong, then inspect the relevant code before proposing a repair.",
+  "olivecode.starter.fix.prompt":
+    "Help me fix a bug in this project. First ask me what is going wrong, then inspect the relevant code before proposing a repair.",
   "olivecode.starter.review": "Review the changes",
   "olivecode.starter.review.description": "Look for bugs and missing checks",
-  "olivecode.starter.review.prompt": "Review the current Git changes for bugs, regressions and missing tests. Explain the concrete issues you find. Do not change files.",
+  "olivecode.starter.review.prompt":
+    "Review the current Git changes for bugs, regressions and missing tests. Explain the concrete issues you find. Do not change files.",
   "olivecode.starter.footer": "Changes stay in your project. You can inspect the work as it happens.",
   "olivecode.starter.plan": "Plan first",
   "olivecode.starter.build": "Build",
@@ -53,11 +132,14 @@ export const dict = {
   "olivecode.project.hint": "Your files stay in their original folder.",
   "olivecode.model.hint": "Local on your computer, or a cloud provider you choose.",
   "olivecode.setup.title": "Your project. Your choice of AI.",
-  "olivecode.setup.description": "Use a model on this computer or connect a cloud provider. You can change this anytime.",
+  "olivecode.setup.description":
+    "Use a model on this computer or connect a cloud provider. You can change this anytime.",
   "olivecode.setup.local": "On this computer",
-  "olivecode.setup.local.description": "Use your installed Ollama models. Local inference stays on this computer; tools may access the network when you allow them.",
+  "olivecode.setup.local.description":
+    "Use your installed Ollama models. Local inference stays on this computer; tools may access the network when you allow them.",
   "olivecode.setup.cloud": "Cloud provider",
-  "olivecode.setup.cloud.description": "Connect a provider. Prompts and relevant code are sent to that provider; its prices and limits apply.",
+  "olivecode.setup.cloud.description":
+    "Connect a provider. Prompts and relevant code are sent to that provider; its prices and limits apply.",
   "olivecode.setup.skip": "Set up later",
   "olivecode.local.title": "Local models",
   "olivecode.local.description": "Choose a downloaded model, or download one by its Ollama or Hugging Face GGUF name.",
@@ -69,16 +151,20 @@ export const dict = {
   "olivecode.local.placeholder": "qwen3:8b or hf.co/author/repository:tag",
   "olivecode.local.download": "Download model",
   "olivecode.local.downloading": "Downloading {{model}}…",
-  "olivecode.local.downloadNotice": "Downloads use disk space and your internet connection. Check the model’s size, license and hardware needs before downloading.",
+  "olivecode.local.downloadNotice":
+    "Downloads use disk space and your internet connection. Check the model’s size, license and hardware needs before downloading.",
   "olivecode.local.use": "Use model",
   "olivecode.local.inspect": "Checking model…",
-  "olivecode.local.noTools": "This model does not advertise tool support. Choose a model with tools to let OliveCode read, edit and test your project.",
+  "olivecode.local.noTools":
+    "This model does not advertise tool support. Choose a model with tools to let OliveCode read, edit and test your project.",
   "olivecode.local.ready": "{{model}} is ready",
   "olivecode.local.ready.description": "Selected for new conversations. Existing conversations keep their model.",
   "olivecode.local.invalid": "Enter a local model name. Cloud shortcuts and command arguments are not supported here.",
   "olivecode.local.failed": "Could not finish the model download. Refresh and try again.",
-  "olivecode.local.unavailable": "Local setup needs the bundled OliveCode engine. Switch back to the local server to continue.",
-  "olivecode.local.custom": "Model choice is yours. Different models have different licenses, safeguards and coding abilities.",
+  "olivecode.local.unavailable":
+    "Local setup needs the bundled OliveCode engine. Switch back to the local server to continue.",
+  "olivecode.local.custom":
+    "Model choice is yours. Different models have different licenses, safeguards and coding abilities.",
   "olivecode.debug": "Toggle performance tools",
   "command.category.suggested": "Suggested",
   "command.category.view": "View",

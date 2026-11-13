@@ -6,6 +6,8 @@ import { Switch } from "@opencode-ai/ui/switch"
 import { useDialog } from "@opencode-ai/ui/context/dialog"
 import { useServerSDK } from "../context/server-sdk"
 import { useLanguage } from "../context/language"
+import { OliveCodePrivacy } from "./olivecode-privacy"
+import { OliveCodeRemote } from "./olivecode-remote"
 import { useTabs } from "../context/tabs"
 import { ServerConnection } from "../context/server"
 import { showToast } from "../utils/toast"
@@ -30,19 +32,22 @@ export function DialogOliveCodeTools(props: { directory?: string; server?: Serve
       return (await sdk().client.app.skills({ directory: props.directory })).data ?? []
     },
   )
-  async function toggle(key: "teamwork" | "followThrough") {
+  async function toggle(key: "teamwork" | "followThrough" | "enabled" | "showBrowser") {
     if (state.saving || !props.directory) return
     setState({ saving: key, error: "" })
     try {
       const result = await sdk().client.config.update({
         directory: props.directory,
-        config: { collaboration: { [key]: !(config()?.collaboration?.[key] ?? true) } },
+        config:
+          key === "enabled" || key === "showBrowser"
+            ? { computer: { [key]: !(config()?.computer?.[key] ?? key === "enabled") } }
+            : { collaboration: { [key]: !(config()?.collaboration?.[key] ?? true) } },
       })
       if (result.error || !result.data) throw new Error("config.update failed")
       await refetch()
-      showToast({ title: language.t("olivecode.tools.saved"), variant: "success" })
+      showToast({ title: language.t("olivecode.preferences.saved"), variant: "success" })
     } catch {
-      setState("error", language.t("olivecode.tools.saveError"))
+      setState("error", language.t("olivecode.preferences.saveError"))
     } finally {
       setState("saving", "")
     }
@@ -53,6 +58,15 @@ export function DialogOliveCodeTools(props: { directory?: string; server?: Serve
         <div class="olive-tools-tabs" role="group" aria-label={language.t("olivecode.tools.title")}>
           <button aria-pressed={state.tab === "assistance"} onClick={() => setState("tab", "assistance")}>
             {language.t("olivecode.tools.assistance")}
+          </button>
+          <button aria-pressed={state.tab === "computer"} onClick={() => setState("tab", "computer")}>
+            {language.t("olivecode.computer.title")}
+          </button>
+          <button aria-pressed={state.tab === "remote"} onClick={() => setState("tab", "remote")}>
+            {language.t("olivecode.remote.title")}
+          </button>
+          <button aria-pressed={state.tab === "privacy"} onClick={() => setState("tab", "privacy")}>
+            {language.t("olivecode.privacy.title")}
           </button>
           <button aria-pressed={state.tab === "skills"} onClick={() => setState("tab", "skills")}>
             {language.t("olivecode.tools.skills")}
@@ -66,14 +80,14 @@ export function DialogOliveCodeTools(props: { directory?: string; server?: Serve
         <Show when={state.tab === "assistance"}>
           <p class="olive-copy">{language.t("olivecode.tools.description")}</p>
           <Show
-            when={!config.loading}
+            when={!!config.error || !!config() || !config.loading}
             fallback={
               <p class="olive-copy" role="status">
                 {language.t("common.loading")}
               </p>
             }
           >
-            <For each={["teamwork", "followThrough"] as const}>
+            <For each={config.error ? [] : (["teamwork", "followThrough"] as const)}>
               {(key) => (
                 <div class="olive-assistance-row">
                   <span>
@@ -83,7 +97,7 @@ export function DialogOliveCodeTools(props: { directory?: string; server?: Serve
                     <span>
                       {language.t(
                         key === "teamwork"
-                          ? "olivecode.tools.teamwork.description"
+                          ? "olivecode.tools.teamwork.handoffs"
                           : "olivecode.tools.followThrough.description",
                       )}
                     </span>
@@ -91,7 +105,8 @@ export function DialogOliveCodeTools(props: { directory?: string; server?: Serve
                   <Switch
                     hideLabel
                     checked={config()?.collaboration?.[key] ?? true}
-                    disabled={!props.directory || !!state.saving || !!config.error || !config()}
+                    readOnly={!!state.saving}
+                    disabled={!props.directory || !!config.error || !config()}
                     onChange={() => void toggle(key)}
                   >
                     {language.t(key === "teamwork" ? "olivecode.tools.teamwork" : "olivecode.tools.followThrough")}
@@ -107,6 +122,60 @@ export function DialogOliveCodeTools(props: { directory?: string; server?: Serve
             </p>
           </Show>
         </Show>
+        <Show when={state.tab === "computer"}>
+          <p class="olive-copy">{language.t("olivecode.computer.description")}</p>
+          <Show
+            when={!!config.error || !!config() || !config.loading}
+            fallback={
+              <p class="olive-copy" role="status">
+                {language.t("common.loading")}
+              </p>
+            }
+          >
+            <For each={config.error ? [] : (["enabled", "showBrowser"] as const)}>
+              {(key) => (
+                <div class="olive-assistance-row">
+                  <span>
+                    <strong>
+                      {language.t(key === "enabled" ? "olivecode.computer.enabled" : "olivecode.computer.browser")}
+                    </strong>
+                    <span>
+                      {language.t(
+                        key === "enabled"
+                          ? "olivecode.computer.enabled.description"
+                          : "olivecode.computer.browser.description",
+                      )}
+                    </span>
+                  </span>
+                  <Switch
+                    hideLabel
+                    checked={config()?.computer?.[key] ?? key === "enabled"}
+                    readOnly={!!state.saving}
+                    disabled={!props.directory || !!config.error || !config()}
+                    onChange={() => void toggle(key)}
+                  >
+                    {language.t(key === "enabled" ? "olivecode.computer.enabled" : "olivecode.computer.browser")}
+                  </Switch>
+                </div>
+              )}
+            </For>
+          </Show>
+          <div class="olive-notice">
+            <p>{language.t("olivecode.computer.permissions")}</p>
+          </div>
+          <p class="olive-copy olive-small">{language.t("olivecode.computer.platforms")}</p>
+          <Show when={config.error}>
+            <p role="alert" class="olive-error">
+              {language.t("olivecode.tools.loadError")}
+            </p>
+          </Show>
+        </Show>
+        <Show when={state.tab === "privacy"}>
+          <OliveCodePrivacy />
+        </Show>
+        <Show when={state.tab === "remote"}>
+          <OliveCodeRemote directory={props.directory} local={ServerConnection.local(sdk().server)} />
+        </Show>
         <Show when={state.tab === "skills"}>
           <p class="olive-copy">{language.t("olivecode.tools.skills.description")}</p>
           <Show
@@ -118,7 +187,7 @@ export function DialogOliveCodeTools(props: { directory?: string; server?: Serve
             }
           >
             <For
-              each={skills()}
+              each={skills.error ? [] : skills()}
               fallback={
                 <p class="olive-copy">
                   {language.t(skills.error ? "olivecode.tools.loadError" : "olivecode.tools.noSkills")}

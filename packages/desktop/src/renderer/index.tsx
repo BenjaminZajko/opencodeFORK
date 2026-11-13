@@ -234,6 +234,9 @@ const createPlatform = (windowState: DesktopWindowState): Platform => {
       getBlob: (id) => window.api.draftBlobGet(id).then((data) => data && new Blob([data])),
     }),
 
+    usageMeasurement: window.api.usageMeasurement,
+    launchRemote: (request) => window.api.launchRemote(request),
+
     updater: {
       state: updaterState,
       check: () => window.api.updater.check(),
