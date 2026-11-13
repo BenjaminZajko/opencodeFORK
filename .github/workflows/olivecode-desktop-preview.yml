@@ -36,6 +36,7 @@ jobs:
       OPENCODE_CHANNEL: olivecode
       MODELS_DEV_API_JSON: ${{ github.workspace }}/packages/opencode/test/tool/fixtures/models-api.json
       CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      NODE_OPTIONS: '--max-old-space-size=6144'
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
