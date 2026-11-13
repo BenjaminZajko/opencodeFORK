@@ -49,7 +49,7 @@ jobs:
         working-directory: packages/app
       - run: bun typecheck
         working-directory: packages/desktop
-      - run: bun test ./src/main/remote-launch.test.ts
+      - run: bun test ./src/main/remote-launch.test.ts ./src/main/preview-packaging.test.ts
         working-directory: packages/desktop
       - run: bun run build
         working-directory: packages/desktop

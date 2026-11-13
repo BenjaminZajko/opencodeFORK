@@ -34,8 +34,9 @@ it does not substitute an upstream OpenCode executable.
   work, not implemented by a toggle.
 - Sponsor acknowledgement preferences do not appear in desktop because this
   desktop has no sponsor placement. Usage opt-in is a separate desktop preference.
-- Windows/Linux native desktop packages and real GUI interaction need their own
-  platform acceptance results. Added `.github/workflows/olivecode-desktop-preview.yml`
+- Windows/Linux full desktop GUI interaction still needs platform-specific
+  acceptance beyond the shared terminal checks. Native builds and packaged engine
+  acceptance run on each operating system. Added `.github/workflows/olivecode-desktop-preview.yml`
   builds on macOS/Windows/Linux, exercises the actual Node bundle, runs shared
   chat/tools/Assist acceptance with local mock models, and packages unsigned
   previews. A workflow file alone is not a passing run.

@@ -11,6 +11,7 @@ const electronDist = join(dirname(require.resolve("electron/package.json")), "di
 const config: Configuration = {
   appId: "dev.olivecode.desktop.workspace",
   productName: "OliveCode Preview",
+  extraMetadata: { desktopName: "dev.olivecode.desktop.workspace.desktop" },
   // Fresh Bun installs may skip Electron’s binary download. In that case,
   // let electron-builder fetch the official binary for the target platform.
   electronDist: existsSync(electronDist) ? electronDist : undefined,
@@ -28,7 +29,13 @@ const config: Configuration = {
     target: ["zip"],
   },
   win: { target: ["nsis"] },
-  linux: { category: "Development", icon: "resources/icons", target: ["AppImage"] },
+  linux: {
+    executableName: "dev.olivecode.desktop.workspace",
+    syncDesktopName: true,
+    category: "Development",
+    icon: "resources/icons",
+    target: ["AppImage"],
+  },
 }
 
 export default config
