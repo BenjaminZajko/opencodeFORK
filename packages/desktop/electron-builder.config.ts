@@ -28,7 +28,7 @@ const config: Configuration = {
     notarize: false,
     target: ["zip"],
   },
-  win: { target: ["nsis"] },
+  win: { icon: "resources/icons/icon.png", target: ["nsis"] },
   linux: {
     executableName: "dev.olivecode.desktop.workspace",
     syncDesktopName: true,

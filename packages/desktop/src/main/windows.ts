@@ -90,8 +90,7 @@ function iconsDir() {
 }
 
 function iconPath() {
-  const ext = process.platform === "win32" ? "ico" : "png"
-  return join(iconsDir(), `icon.${ext}`)
+  return join(iconsDir(), "icon.png")
 }
 
 function tone() {
